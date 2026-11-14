@@ -23,7 +23,7 @@ export default function Nav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`rounded-md px-3 py-1 ${path === l.href ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+              className={`rounded-md px-3 py-1 ${(l.href === "/" ? path === "/" : path.startsWith(l.href)) ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
             >
               {l.label}
             </Link>

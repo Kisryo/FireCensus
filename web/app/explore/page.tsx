@@ -1,403 +1,256 @@
 "use client";
-import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+// Guided Explore: pick an area and a month, then read three plain answers.
+// The full 3D skyline / map / source controls live at /explore/advanced.
+import Link from "next/link";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, type Cell, type Compare, type CalendarMonth, type Region, type SeriesRow } from "@/lib/api";
+import { api, type CalendarMonth, type Compare, type Region, type SeriesRow } from "@/lib/api";
 import { CASES, COUNTRIES, countryName } from "@/lib/regions";
-import { MONTHS, fmt, VIRIDIS_STOPS, RDBU_STOPS } from "@/lib/colors";
-import CalendarHeatmap from "@/components/CalendarHeatmap";
-import type { Grid, Preset } from "@/components/Skyline3D";
+import { MONTHS, fmt } from "@/lib/colors";
+import { HistoryBars, SeasonChart, TrendChart } from "@/components/Charts";
 
-const Skyline3D = dynamic(() => import("@/components/Skyline3D"), { ssr: false });
-const RegionMap = dynamic(() => import("@/components/RegionMap"), { ssr: false });
-
-type Source = "firecensus" | "modis" | "viirs" | "naive";
-const SOURCES: { id: Source; label: string; hint: string }[] = [
-  { id: "firecensus", label: "FireCensus", hint: "Harmonized, VIIRS-equivalent count incl. fires no satellite saw" },
-  { id: "modis", label: "Raw MODIS", hint: "Fires seen by Aqua MODIS (1 km pixels): misses most small fires" },
-  { id: "viirs", label: "Raw VIIRS", hint: "Fires seen by S-NPP VIIRS (375 m), from 2012 to 2 Nov 2026" },
-  { id: "naive", label: "Raw best sensor", hint: "What you get by switching to the newest sensor: a fake 4× jump in 2012" },
+type Tab = "normal" | "season" | "trend";
+const TABS: { id: Tab; q: string; sub: string }[] = [
+  { id: "normal", q: "Is this month normal?", sub: "Compare with the same month in other years" },
+  { id: "season", q: "When is the fire season?", sub: "The typical year, month by month" },
+  { id: "trend", q: "Is the long-term trend real?", sub: "Satellite changes vs real change" },
 ];
-const PRESETS: { id: Preset; label: string; key: string }[] = [
-  { id: "iso", label: "Isometric", key: "1" },
-  { id: "front", label: "Front · seasons", key: "2" },
-  { id: "side", label: "Side · years", key: "3" },
-  { id: "top", label: "Top · 2D", key: "4" },
-];
+const LAST = { y: 2026, m: 11 };
 
-const median = (a: number[]) => {
-  if (!a.length) return 0;
-  const s = [...a].sort((x, y) => x - y);
-  const k = (s.length - 1) / 2;
-  return (s[Math.floor(k)] + s[Math.ceil(k)]) / 2;
-};
-const quantile = (a: number[], q: number) => {
-  if (!a.length) return 0;
-  const s = [...a].sort((x, y) => x - y);
-  const k = (s.length - 1) * q;
-  return s[Math.floor(k)] + (s[Math.ceil(k)] - s[Math.floor(k)]) * (k - Math.floor(k));
-};
+function useAreaFromUrl() {
+  const p = useSearchParams();
+  const c = CASES.find((x) => x.id === p.get("case"));
+  if (c) return { key: `case:${c.id}`, y: c.year, m: c.month };
+  const co = p.get("country");
+  if (co && COUNTRIES.some((x) => x.id === co)) return { key: `country:${co}`, y: 2026, m: 10 };
+  return { key: `case:${CASES[0].id}`, y: CASES[0].year, m: CASES[0].month };
+}
 
-function ExploreInner() {
-  const params = useSearchParams();
-  const initCase = CASES.find((c) => c.id === params.get("case")) ?? CASES[1];
-
-  const [mode, setMode] = useState<"case" | "country" | "bbox">("case");
-  const [caseId, setCaseId] = useState(initCase.id);
-  const [country, setCountry] = useState("Indonesia");
-  const [bbox, setBbox] = useState(initCase.bbox);
-  const [start, setStart] = useState("2002-07");
-  const [end, setEnd] = useState("2026-11");
-  const [source, setSource] = useState<Source>("firecensus");
-  const [view, setView] = useState<"skyline" | "calendar" | "map">("skyline");
-  const [preset, setPreset] = useState<Preset>("iso");
-  const [anomaly, setAnomaly] = useState(false);
-  const [log, setLog] = useState(false);
-  const [recovered, setRecovered] = useState(false);
-  const [fixedScale, setFixedScale] = useState(false);
+function GuidedInner() {
+  const init = useAreaFromUrl();
+  const [area, setArea] = useState(init.key);
+  const [year, setYear] = useState(init.y);
+  const [month, setMonth] = useState(init.m);
+  const [tab, setTab] = useState<Tab>("normal");
 
   const [series, setSeries] = useState<SeriesRow[]>([]);
   const [cal, setCal] = useState<{ critical_months: number[]; months: CalendarMonth[] } | null>(null);
   const [cmp, setCmp] = useState<Compare | null>(null);
-  const [cells, setCells] = useState<Cell[]>([]);
-  const [cellNote, setCellNote] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "slow" | "ready" | "error">("idle");
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [err, setErr] = useState("");
-  const [hover, setHover] = useState<{ y: number; m: number } | null>(null);
-  const [picked, setPicked] = useState<{ y: number; m: number }>({ y: initCase.year, m: initCase.month });
 
+  const [kind, id] = area.split(":");
+  const theCase = kind === "case" ? CASES.find((c) => c.id === id)! : null;
   const region: Region = useMemo(
-    () => {
-      if (mode === "country") return { country };
-      if (mode === "case") {
-        const c = CASES.find((x) => x.id === caseId)!;
-        return c.country ? { country: c.country } : { bbox: c.bbox };
-      }
-      return { bbox };
-    },
-    [mode, country, bbox, caseId]
+    () => (kind === "country" ? { country: id } : theCase!.country ? { country: theCase!.country } : { bbox: theCase!.bbox }),
+    [kind, id, theCase]
   );
-  const regionLabel = mode === "country" ? countryName(country) : mode === "case" ? CASES.find((c) => c.id === caseId)!.title : `Box ${bbox}`;
+  const areaName = kind === "country" ? countryName(id) : theCase!.title.split(":")[0];
 
-  const analyze = useCallback(async () => {
-    setStatus("loading");
-    setErr("");
-    const slow = setTimeout(() => setStatus((s) => (s === "loading" ? "slow" : s)), 5000);
-    try {
-      const [ts, c] = await Promise.all([api.timeseries(region, start, end), api.calendar(region)]);
-      setSeries(ts.series);
-      setCal(c);
-      setStatus(ts.series.some((r) => r.n_hat > 0) ? "ready" : "error");
-      if (!ts.series.some((r) => r.n_hat > 0)) setErr("No fires detected in this area and period. Try a larger area.");
-    } catch (e: any) {
-      setStatus("error");
-      setErr(e.message?.includes("fetch") ? "Can't reach the FireCensus API. Is the backend running?" : e.message);
-    } finally {
-      clearTimeout(slow);
-    }
-  }, [region, start, end]);
-
-  // re-analyze automatically when a case or country is chosen (box and date edits wait for the Analyze button)
-  const regionKey = mode === "bbox" ? "bbox" : JSON.stringify(region);
-  useEffect(() => { analyze(); /* eslint-disable-next-line */ }, [regionKey]);
-
-  // month detail: compare + map cells
+  // load the area's whole record once per area
   useEffect(() => {
-    if (status !== "ready") return;
-    api.compare(region, picked.y, picked.m).then(setCmp).catch(() => setCmp(null));
-    const res = picked.y < 2012 ? 0.5 : 0.25;
-    api.cells(picked.y, picked.m, res, region.country ? { country: region.country } : {})
-      .then((r) => { setCells(r.cells); setCellNote(r.note); }).catch(() => setCells([]));
-  }, [picked, status, region]);
+    setState("loading");
+    Promise.all([api.timeseries(region, "2002-07", `${LAST.y}-${LAST.m}`), api.calendar(region)])
+      .then(([ts, c]) => { setSeries(ts.series); setCal(c); setState("ready"); })
+      .catch((e) => { setState("error"); setErr(String(e.message).includes("fetch") ? "Can't reach the FireCensus API. Is the backend running?" : e.message); });
+  }, [region]);
 
-  // keyboard: 1-4 camera presets
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
-      const p = PRESETS.find((x) => x.key === e.key);
-      if (p) { setPreset(p.id); setView("skyline"); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    if (state !== "ready") return;
+    api.compare(region, year, month).then(setCmp).catch(() => setCmp(null));
+  }, [region, year, month, state]);
 
-  const idx = useMemo(() => {
-    const m = new Map<string, SeriesRow>();
-    series.forEach((r) => m.set(`${r.year}-${r.month}`, r));
-    return m;
-  }, [series]);
-
-  const pick = (r: SeriesRow | undefined, s: Source) => {
-    if (!r) return 0;
-    if (s === "modis") return r.aqua_raw ?? 0;
-    if (s === "viirs") return r.snpp_raw ?? 0;
-    if (s === "naive") return r.naive_best_sensor ?? 0;
-    return r.n_hat;
+  const chooseArea = (v: string) => {
+    setArea(v);
+    const c = v.startsWith("case:") ? CASES.find((x) => `case:${x.id}` === v) : null;
+    if (c) { setYear(c.year); setMonth(c.month); }
   };
 
-  const grid: Grid | null = useMemo(() => {
-    if (!series.length) return null;
-    const years = Array.from(new Set(series.map((r) => r.year))).sort();
-    const med = new Map<number, number>();
-    for (let m = 1; m <= 12; m++) {
-      med.set(m, median(series.filter((r) => r.month === m && r.year >= 2003 && r.year <= 2025).map((r) => pick(r, source))));
-    }
-    return {
-      years,
-      value: (y, m) => pick(idx.get(`${y}-${m}`), source),
-      fc: (y, m) => idx.get(`${y}-${m}`)?.n_hat ?? 0,
-      raw: (y, m) => idx.get(`${y}-${m}`)?.aqua_raw ?? 0,
-      ratio: (y, m) => (pick(idx.get(`${y}-${m}`), source) + 1) / ((med.get(m) ?? 0) + 1),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [series, idx, source]);
+  const row = (y: number, m: number) => series.find((r) => r.year === y && r.month === m);
+  const ML = MONTHS[month - 1];
 
-  // ---------- summary cards ----------
-  const summary = useMemo(() => {
-    if (!series.length) return null;
-    const full = series.filter((r) => r.year >= 2003 && r.year <= 2025);
-    const byYear = new Map<number, number>();
-    full.forEach((r) => byYear.set(r.year, (byYear.get(r.year) ?? 0) + r.n_hat));
-    const topYears = [...byYear.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  // ---------- Q1 ----------
+  const q1 = useMemo(() => {
+    if (!cmp) return null;
+    const hist = series.filter((r) => r.month === month && r.year >= 2003).map((r) => ({ year: r.year, n_hat: r.n_hat }));
+    const others = hist.filter((h) => h.year !== year && h.year <= 2025);
+    const below = others.filter((h) => h.n_hat < cmp.n_hat).length;
+    const top = series.filter((r) => r.year >= 2003 && r.year <= 2025);
     const p90 = new Map<number, number>();
-    for (let m = 1; m <= 12; m++) p90.set(m, quantile(full.filter((r) => r.month === m).map((r) => r.n_hat), 0.9));
-    const unusual = series
-      .filter((r) => r.n_hat > (p90.get(r.month) ?? Infinity) && r.n_hat > 50)
-      .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month))
-      .slice(0, 6);
-    return { topYears, unusual };
-  }, [series]);
+    for (let m = 1; m <= 12; m++) {
+      const v = top.filter((r) => r.month === m).map((r) => r.n_hat).sort((a, b) => a - b);
+      p90.set(m, v.length ? v[Math.floor(0.9 * (v.length - 1))] : Infinity);
+    }
+    const unusual = series.filter((r) => r.year >= 2003 && r.n_hat > (p90.get(r.month) ?? Infinity) && r.n_hat > 50)
+      .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month)).slice(0, 8);
+    return { hist, below, total: others.length, unusual, raw: row(year, month)?.aqua_raw };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmp, series, year, month]);
 
-  const critical = useMemo(() => {
+  // ---------- Q2 ----------
+  const q2 = useMemo(() => {
     if (!cal) return null;
     const ms = cal.months;
     const peak = ms.reduce((a, b) => (b.n_median > a.n_median ? b : a), ms[0]);
     const crit = cal.critical_months;
-    const top3 = [...ms].sort((a, b) => b.n_median - a.n_median).slice(0, 3).map((m) => MONTHS[m.month - 1]);
-    return { peak: MONTHS[peak.month - 1], first: MONTHS[(crit[0] ?? peak.month) - 1], last: MONTHS[(crit[crit.length - 1] ?? peak.month) - 1], top3 };
-  }, [cal]);
+    const cur = Array.from({ length: 12 }, (_, i) => row(year, i + 1)?.n_hat ?? null);
+    const curPeak = cur.reduce<{ m: number; v: number }>((a, v, i) => (v !== null && v > a.v ? { m: i + 1, v } : a), { m: 0, v: -1 });
+    return { peak: peak.month, first: crit[0] ?? peak.month, last: crit[crit.length - 1] ?? peak.month, cur, curPeak,
+      curPeakRatio: curPeak.m ? (curPeak.v + 1) / ((ms[curPeak.m - 1]?.n_median ?? 0) + 1) : null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cal, series, year]);
 
-  const hv = hover ? idx.get(`${hover.y}-${hover.m}`) : undefined;
+  // ---------- Q3 ----------
+  const q3 = useMemo(() => {
+    const years = Array.from({ length: 23 }, (_, i) => 2003 + i);
+    const sum = (y: number, f: (r: SeriesRow) => number) => series.filter((r) => r.year === y).reduce((a, r) => a + (f(r) || 0), 0);
+    const fc = years.map((y) => sum(y, (r) => r.n_hat));
+    const naive = years.map((y) => sum(y, (r) => r.naive_best_sensor ?? 0));
+    const modis = years.map((y) => sum(y, (r) => r.aqua_raw ?? 0));
+    const i12 = years.indexOf(2012);
+    const idx = (v: number[]) => {
+      const base = v.slice(i12).reduce((a, b) => a + b, 0) / (years.length - i12);
+      return v.map((x) => (base ? (100 * x) / base : 0));
+    };
+    const i11 = years.indexOf(2011);
+    const jumpNaive = naive[i11] ? naive[i12] / naive[i11] : null;
+    const chgFc = fc[i11] ? (fc[i12] / fc[i11] - 1) * 100 : null;
+    const busiest = years.map((y, i) => ({ y, v: fc[i] })).sort((a, b) => b.v - a.v).slice(0, 3);
+    return { years, fc: idx(fc), naive: idx(naive), modis: idx(modis), jumpNaive, chgFc, busiest };
+  }, [series]);
+
+  const advancedHref = kind === "country" ? `/explore/advanced?country=${id}` : `/explore/advanced?case=${id}`;
+  const statusColor = cmp?.status === "above normal" ? "bg-fire/20 text-fire" : cmp?.status === "below normal" ? "bg-sat/20 text-sat" : "bg-white/10 text-slate-200";
 
   return (
-    <main className="flex h-screen flex-col pt-12">
-      <div className="flex min-h-0 flex-1">
-        {/* ---------------- control panel ---------------- */}
-        <aside className="w-[300px] shrink-0 space-y-5 overflow-y-auto border-r border-line p-4">
-          <section>
-            <div className="label mb-2">1 · Area</div>
-            <div className="mb-2 flex gap-1">
-              {(["case", "country", "bbox"] as const).map((m) => (
-                <button key={m} className={`btn flex-1 ${mode === m ? "btn-on" : ""}`} onClick={() => setMode(m)}>
-                  {m === "case" ? "Case" : m === "country" ? "Country" : "Box"}
-                </button>
-              ))}
-            </div>
-            {mode === "case" && (
-              <div className="space-y-1">
-                {CASES.map((c) => (
-                  <button key={c.id} className={`btn w-full text-left ${caseId === c.id ? "btn-on" : ""}`}
-                    onClick={() => { setCaseId(c.id); setPicked({ y: c.year, m: c.month }); }}>
-                    <div className="text-[13px]">{c.title}</div>
-                    <div className="text-[11px] text-slate-500">{c.kicker}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {mode === "country" && (
-              <select className="w-full" value={country} onChange={(e) => setCountry(e.target.value)}>
-                {COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            )}
-            {mode === "bbox" && (
-              <div className="space-y-1">
-                <input className="num w-full" value={bbox} onChange={(e) => setBbox(e.target.value)} aria-label="west,south,east,north" />
-                <p className="text-[11px] text-slate-500">west, south, east, north (°). Or use <b>Map → Draw area</b>.</p>
-              </div>
-            )}
-          </section>
-
-          <section>
-            <div className="label mb-2">2 · Dates</div>
-            <div className="grid grid-cols-[40px_1fr] items-center gap-2 text-sm">
-              <span className="text-slate-400">From</span>
-              <input type="month" min="2002-07" max="2026-11" value={start} onChange={(e) => setStart(e.target.value)} className="num w-full" />
-              <span className="text-slate-400">To</span>
-              <input type="month" min="2002-07" max="2026-11" value={end} onChange={(e) => setEnd(e.target.value)} className="num w-full" />
-            </div>
-            <button className="mt-3 w-full rounded-lg bg-fire px-3 py-2 text-sm font-semibold text-black hover:brightness-110" onClick={analyze}>
-              Analyze
-            </button>
-          </section>
-
-          <section>
-            <div className="label mb-2">3 · Data source</div>
-            <div className="space-y-1">
-              {SOURCES.map((s) => (
-                <button key={s.id} title={s.hint} className={`btn w-full text-left ${source === s.id ? "btn-on" : ""}`} onClick={() => setSource(s.id)}>
-                  {s.label}
-                  <div className="text-[11px] text-slate-500">{s.hint}</div>
-                </button>
-              ))}
-            </div>
-            <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={recovered} onChange={(e) => setRecovered(e.target.checked)} /> Highlight fires recovered vs raw MODIS (orange)</label>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={anomaly} onChange={(e) => setAnomaly(e.target.checked)} /> Anomaly colours (vs median)</label>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={log} onChange={(e) => setLog(e.target.checked)} /> Log scale</label>
-            <label className="flex items-center gap-2 text-sm" title="Keep bar heights on the FireCensus scale when switching sources, so raw counts look as small as they really are">
-              <input type="checkbox" checked={fixedScale || recovered} disabled={recovered} onChange={(e) => setFixedScale(e.target.checked)} /> Same scale for every source
-            </label>
-          </section>
-
-          <section>
-            <div className="label mb-2">4 · Download</div>
-            <a className="btn block" href={api.csvTimeseries(region, start, end)}>⬇ Monthly series (CSV)</a>
-            <a className="btn mt-1 block" href={api.csvCells(region.country ? { country: region.country } : region, `${picked.y}-${String(picked.m).padStart(2, "0")}`, `${picked.y}-${String(picked.m).padStart(2, "0")}`)}>
-              ⬇ 0.1° cells, {MONTHS[picked.m - 1]} {picked.y} (CSV)
-            </a>
-            <p className="mt-2 text-[11px] leading-snug text-slate-500">
-              Data: NASA FIRMS (MODIS C6.1, VIIRS 375 m). We acknowledge LANCE FIRMS, operated by NASA ESDIS.
-            </p>
-          </section>
-        </aside>
-
-        {/* ---------------- main view ---------------- */}
-        <section className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-            <div className="mr-2 text-sm">
-              <span className="text-slate-400">Area:</span> <b>{regionLabel}</b>
-            </div>
-            {(["skyline", "calendar", "map"] as const).map((v) => (
-              <button key={v} className={`btn ${view === v ? "btn-on" : ""}`} onClick={() => setView(v)}>
-                {v === "skyline" ? "3D skyline" : v === "calendar" ? "2D calendar" : "Map"}
-              </button>
-            ))}
-            {view === "skyline" && (
-              <div className="ml-2 flex gap-1">
-                {PRESETS.map((p) => (
-                  <button key={p.id} className={`btn ${preset === p.id ? "btn-on" : ""}`} onClick={() => setPreset(p.id)} title={`Shortcut: ${p.key}`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            <Legend anomaly={anomaly} />
+    <main className="mx-auto max-w-6xl px-5 pb-16 pt-20">
+      {/* ---------- 1. area + month ---------- */}
+      <div className="card flex flex-wrap items-end gap-4 p-4">
+        <label className="flex flex-col gap-1">
+          <span className="label">Area</span>
+          <select value={area} onChange={(e) => chooseArea(e.target.value)} className="min-w-[260px] py-1.5 text-[15px]">
+            <optgroup label="Featured cases">
+              {CASES.map((c) => <option key={c.id} value={`case:${c.id}`}>{c.title}</option>)}
+            </optgroup>
+            <optgroup label="Countries">
+              {COUNTRIES.map((c) => <option key={c.id} value={`country:${c.id}`}>{c.name}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="label">Month</span>
+          <div className="flex gap-2">
+            <select value={month} onChange={(e) => setMonth(+e.target.value)} className="py-1.5 text-[15px]">
+              {MONTHS.map((m, i) => <option key={m} value={i + 1} disabled={year === LAST.y && i + 1 > LAST.m}>{m}</option>)}
+            </select>
+            <select value={year} onChange={(e) => { const y = +e.target.value; setYear(y); if (y === LAST.y && month > LAST.m) setMonth(LAST.m); }} className="num py-1.5 text-[15px]">
+              {Array.from({ length: LAST.y - 2002 }, (_, i) => LAST.y - i).map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
           </div>
-
-          <div className="relative min-h-0 flex-1">
-            {status === "loading" || status === "slow" ? (
-              <div className="flex h-full items-center justify-center text-slate-400">
-                {status === "slow" ? "Our server is waking up (about 30 s)…" : "Counting fires…"}
-              </div>
-            ) : status === "error" ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-300">
-                <p>{err}</p>
-                <button className="btn" onClick={analyze}>Retry</button>
-              </div>
-            ) : grid && view === "skyline" ? (
-              <Skyline3D grid={grid} preset={preset} log={log} anomaly={anomaly} recovered={recovered && source === "firecensus"} fixedScale={fixedScale || recovered}
-                onHover={setHover} onPick={setPicked} />
-            ) : grid && view === "calendar" ? (
-              <CalendarHeatmap grid={grid} anomaly={anomaly} log={log} selected={picked} onHover={setHover} onPick={setPicked} />
-            ) : view === "map" ? (
-              <RegionMap cells={cells} res={picked.y < 2012 ? 0.5 : 0.25} anomaly={anomaly} bbox={region.bbox}
-                onBbox={(b) => { setBbox(b); setMode("bbox"); }} />
-            ) : null}
-
-            {hv && (
-              <div className="card pointer-events-none absolute right-4 top-4 w-64 p-3 text-sm">
-                <div className="mb-1 font-semibold">{MONTHS[hv.month - 1]} {hv.year}</div>
-                <Row k="FireCensus (harmonized)" v={fmt(hv.n_hat)} strong />
-                <Row k="Raw MODIS (Aqua)" v={fmt(hv.aqua_raw)} />
-                <Row k="Raw VIIRS (S-NPP)" v={hv.year >= 2012 ? fmt(hv.snpp_raw) : "not in orbit"} />
-                <Row k="Seen by any sensor" v={fmt(hv.n_obs)} />
-                <Row k="Recovered vs MODIS" v={hv.aqua_raw ? `${(hv.n_hat / Math.max(hv.aqua_raw, 1)).toFixed(1)}×` : "–"} />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {hv.year < 2012 ? "MODIS-only era: back-cast from Aqua; wider uncertainty." : hv.year === 2026 && hv.month >= 8 ? "Near-real-time data. S-NPP ended 2 Nov 2026." : hv.sensor_era}
-                </p>
-              </div>
-            )}
-            {view === "map" && cellNote && (
-              <div className="card absolute bottom-4 left-4 max-w-md p-2 text-[11px] text-slate-400">{cellNote}</div>
-            )}
-          </div>
-
-          {/* ---------------- bottom info bar ---------------- */}
-          <div className="grid grid-cols-1 gap-3 border-t border-line p-3 md:grid-cols-4">
-            <div className="card p-3">
-              <div className="label">This month vs history</div>
-              {cmp ? (
-                <>
-                  <div className="mt-1 text-sm text-slate-300">{MONTHS[cmp.month - 1]} {cmp.year}</div>
-                  <div className="num text-2xl font-semibold">{fmt(cmp.n_hat)}</div>
-                  <div className="text-xs text-slate-400">
-                    median {fmt(cmp.median)} · <b className={cmp.ratio_to_median >= 1.5 ? "text-fire" : cmp.ratio_to_median <= 0.67 ? "text-sat" : ""}>{cmp.ratio_to_median}×</b> · {cmp.percentile}th pct
-                  </div>
-                  <div className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${cmp.status === "above normal" ? "bg-fire/20 text-fire" : cmp.status === "below normal" ? "bg-sat/20 text-sat" : "bg-white/10"}`}>{cmp.status}</div>
-                  <p className="mt-1 text-[11px] text-slate-500">Click any bar or cell to change the month.</p>
-                </>
-              ) : <div className="text-sm text-slate-500">–</div>}
-            </div>
-            <div className="card p-3">
-              <div className="label">Peak months & years</div>
-              {critical && summary ? (
-                <div className="mt-1 text-sm">
-                  <div>Months: <b>{critical.top3.join(", ")}</b></div>
-                  <div className="mt-1">Years: {summary.topYears.map(([y, v], i) => <span key={y} className="num">{i ? " · " : ""}<b>{y}</b> <span className="text-slate-400">{fmt(v)}</span></span>)}</div>
-                  <p className="mt-1 text-[11px] text-slate-500">Full years 2003–2025.</p>
-                </div>
-              ) : "–"}
-            </div>
-            <div className="card p-3">
-              <div className="label">Unusual periods (&gt; 90th pct)</div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {summary?.unusual.length ? summary.unusual.map((r) => (
-                  <button key={`${r.year}-${r.month}`} className="btn num px-2 py-0.5 text-xs" onClick={() => setPicked({ y: r.year, m: r.month })}>
-                    {MONTHS[r.month - 1]} {r.year}
-                  </button>
-                )) : <span className="text-sm text-slate-500">none</span>}
-              </div>
-            </div>
-            <div className="card p-3">
-              <div className="label">Critical period</div>
-              {critical ? (
-                <div className="mt-1 text-sm">
-                  Fire season <b>{critical.first}–{critical.last}</b>, peak in <b>{critical.peak}</b>
-                  <p className="mt-1 text-[11px] text-slate-500">Months with a median ≥ 50% of the peak month (2003–2025).</p>
-                </div>
-              ) : "–"}
-            </div>
-          </div>
-        </section>
+        </label>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <a className="btn" href={api.csvTimeseries(region, "2002-07", `${LAST.y}-${LAST.m}`)}>⬇ Monthly data (CSV)</a>
+          <Link className="btn" href={advancedHref}>3D skyline & map →</Link>
+        </div>
+        {theCase && <p className="w-full text-sm text-slate-400">{theCase.story[0]}</p>}
       </div>
+
+      {/* ---------- 2. question tabs ---------- */}
+      <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-3" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className={`rounded-xl border p-4 text-left transition ${tab === t.id ? "border-fire bg-fire/10" : "border-line bg-panel/60 hover:border-slate-500"}`}>
+            <div className="text-[17px] font-semibold">{t.q}</div>
+            <div className="text-sm text-slate-400">{t.sub}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* ---------- 3. answer ---------- */}
+      <section className="card mt-4 p-6">
+        {state === "loading" && <p className="text-slate-400">Counting fires…</p>}
+        {state === "error" && <p className="text-slate-300">{err}</p>}
+
+        {state === "ready" && tab === "normal" && cmp && q1 && (
+          <>
+            <p className="text-slate-400">{areaName} · {ML} {year}</p>
+            <h2 className="mt-1 text-3xl font-semibold leading-tight">
+              <span className="num">{fmt(cmp.n_hat)}</span> fires, <span className={cmp.ratio_to_median >= 1.5 ? "text-fire" : cmp.ratio_to_median <= 0.67 ? "text-sat" : ""}>{cmp.ratio_to_median}×</span> a typical {ML}
+              <span className={`ml-3 inline-block rounded-md px-2 py-1 align-middle text-sm ${statusColor}`}>{cmp.status}</span>
+            </h2>
+            <p className="mt-2 max-w-3xl text-slate-300">
+              More fires than in <b>{q1.below} of the {q1.total}</b> other {ML}s since 2003. A typical {ML} here has about {fmt(cmp.median)} fires.
+              {q1.raw ? <> A single satellite (MODIS) saw only <b>{fmt(q1.raw)}</b> of them. The rest were missed or too small for its 1 km pixels.</> : null}
+            </p>
+            <div className="mt-5"><HistoryBars history={q1.hist} year={year} median={cmp.median} monthLabel={ML} onPick={setYear} /></div>
+            <p className="mt-1 text-xs text-slate-500">Click a bar to jump to that year.</p>
+            {q1.unusual.length > 0 && (
+              <div className="mt-5">
+                <div className="label">Months far above normal (top 10% for their calendar month)</div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {q1.unusual.map((r) => (
+                    <button key={`${r.year}-${r.month}`} className="btn num px-2 py-0.5 text-xs" onClick={() => { setYear(r.year); setMonth(r.month); }}>
+                      {MONTHS[r.month - 1]} {r.year}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {state === "ready" && tab === "season" && q2 && cal && (
+          <>
+            <p className="text-slate-400">{areaName}</p>
+            <h2 className="mt-1 text-3xl font-semibold leading-tight">
+              Fire season runs <span className="text-fire">{MONTHS[q2.first - 1]}–{MONTHS[q2.last - 1]}</span>, peaking in {MONTHS[q2.peak - 1]}
+            </h2>
+            <p className="mt-2 max-w-3xl text-slate-300">
+              Based on 2003–2025. The shaded months are the critical period, when a typical month has at least half the fires of the peak month.
+              {q2.curPeak.m > 0 && q2.curPeakRatio && (
+                <> In <b>{year}</b>, the busiest month was <b>{MONTHS[q2.curPeak.m - 1]}</b> with {fmt(q2.curPeak.v)} fires, {q2.curPeakRatio.toFixed(1)}× its typical level.</>
+              )}
+            </p>
+            <div className="mt-5"><SeasonChart months={cal.months} current={q2.cur} year={year} critical={cal.critical_months} /></div>
+            <p className="mt-1 text-xs text-slate-500">Change the year at the top to compare another season against the typical one.</p>
+          </>
+        )}
+
+        {state === "ready" && tab === "trend" && (
+          <>
+            <p className="text-slate-400">{areaName} · yearly totals 2003–2025</p>
+            <h2 className="mt-1 text-3xl font-semibold leading-tight">
+              {q3.jumpNaive && q3.jumpNaive > 1.5 ? <>The 2012 jump is the satellite, not the fires</> : <>Yearly fire activity, free of sensor changes</>}
+            </h2>
+            <p className="mt-2 max-w-3xl text-slate-300">
+              {q3.jumpNaive ? <>If you always use the newest satellite, fire counts jump <b className="text-fire">×{q3.jumpNaive.toFixed(1)}</b> from 2011 to 2012, the year VIIRS arrived. </> : null}
+              {q3.chgFc !== null ? <>FireCensus changes by <b className="text-sat">{q3.chgFc > 0 ? "+" : ""}{q3.chgFc.toFixed(0)}%</b>, because it counts the fires each sensor misses. </> : null}
+              Busiest years: {q3.busiest.map((b, i) => <span key={b.y}>{i ? ", " : ""}<b>{b.y}</b></span>)}.
+            </p>
+            <div className="mt-5">
+              <TrendChart years={q3.years} series={[
+                { label: "FireCensus (harmonized)", color: "#4FC3F7", values: q3.fc },
+                { label: "Newest satellite available (raw)", color: "#FF6B35", values: q3.naive, dashed: true },
+                { label: "MODIS only (raw)", color: "#94a3b8", values: q3.modis, dashed: true },
+              ]} />
+            </div>
+            <p className="mt-1 text-xs text-slate-500">Each line is scaled so its 2012–2025 average = 100, so sources with very different raw counts can share one axis.</p>
+          </>
+        )}
+      </section>
+
+      <p className="mt-4 text-xs text-slate-500">
+        Fire counts are FireCensus harmonized estimates (VIIRS-equivalent, including fires no satellite saw), afternoon window, 0.1° grid.
+        2002–2011 reconstructed from MODIS; Aug–Nov 2026 near-real-time. Data: NASA FIRMS (LANCE / ESDIS). <Link href="/method" className="text-sat underline">How it works</Link>
+      </p>
     </main>
-  );
-}
-
-function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
-  return (
-    <div className="flex justify-between gap-2 text-[13px]">
-      <span className="text-slate-400">{k}</span>
-      <span className={`num ${strong ? "font-semibold text-white" : ""}`}>{v}</span>
-    </div>
-  );
-}
-
-function Legend({ anomaly }: { anomaly: boolean }) {
-  const stops = anomaly ? RDBU_STOPS : VIRIDIS_STOPS;
-  return (
-    <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400">
-      <span>{anomaly ? "¼× median" : "few"}</span>
-      <span className="h-2.5 w-28 rounded" style={{ background: `linear-gradient(90deg, ${stops.join(",")})` }} />
-      <span>{anomaly ? "4× median" : "many fires"}</span>
-    </div>
   );
 }
 
 export default function ExplorePage() {
   return (
-    <Suspense fallback={<div className="pt-20 text-center text-slate-400">Loading…</div>}>
-      <ExploreInner />
+    <Suspense fallback={<div className="pt-24 text-center text-slate-400">Loading…</div>}>
+      <GuidedInner />
     </Suspense>
   );
 }
