@@ -219,6 +219,7 @@ function StoryInner() {
             className={`h-2.5 w-2.5 rounded-full ${i === step ? "bg-fire" : i >= 5 ? "bg-sat/40" : "bg-white/25"}`} />
         ))}
       </nav>
+      {!mapOn && (
         <div className="fixed bottom-3 right-3 z-[25] flex h-[112px] w-[410px] flex-col justify-center gap-2 rounded-2xl border border-line bg-[#0B0F1A] px-5">
           {step < EXPLORE ? (
             <button className="btn self-start bg-space" onClick={() => refs.current[EXPLORE]?.scrollIntoView({ behavior: "smooth", block: "start" })}>
