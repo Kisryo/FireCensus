@@ -136,3 +136,35 @@ The Welcome overview frames correctly; the darkness reads as intended from the #
 - **材质数量**：从 107 降到 61，但仍偏多，主要来自 NASA 模型。另外三角面约 11 万、1 盏灯、1 个后期效果，笔电应该没问题，但没实测帧率。
 - **网页代码要更新**：旧的 `stage` 变量和按键 1–5 已经删除，网页里原来的 `setVariable('stage', N)` 不再有作用。
 - **备份方式改了**：免费版 Spline 不允许复制文件，所以备份另存成了本机文件 `FireCensus_backup_2026-11-08.spline`，放在这个 session 的文件夹里。
+---
+
+## Update 2026-11-14 — v4 (Explore) and v5 (one story on one globe)
+
+Details: `docs/spline-v4-notes.md` and `docs/spline-v5-report.md`. No existing object name, state name or the `scene` variable was renamed.
+
+### States (`scene` values, string, case-sensitive)
+| State | Chapter | Since |
+|---|---|---|
+| `Welcome` | 1 | v1 |
+| `Story_Fleet` | 2 | **v5** |
+| `Story_Scan` | 3 | v1 |
+| `Story_Zoom` | 4 | v1 |
+| `Story_Handoff` | 5 (ends on the `Explore_Overview` pose; pins fade in at the end) | v1, changed v4/v5 |
+| `Story_Example_Month` | 6 | **v5** |
+| `Story_Example_Season` | 7 | **v5** |
+| `Story_Example_Trend` | 8 | **v5** |
+| `Explore_Overview`, `Explore_<id>` | 9 | v4 |
+| `Focus_Terra` / `_Aqua` / `_SNPP` / `_NOAA20` / `_NOAA21` | satellite click | v1 |
+
+### Objects added since v3
+| Object | Where | Purpose |
+|---|---|---|
+| `Sat_Terra_Ghost`, `Sat_NOAA21_Ghost` | inside `OrbitSpin_Terra` / `OrbitSpin_NOAA21` | Grey 60% copies shown in Story_Scan (v3 fix 6) |
+| `NotePlate_Terra`, `NotePlate_NOAA21` | inside `OrbitSpin_Terra` / `OrbitSpin_NOAA21` | Dark plates behind the Story_Scan notes |
+| `Pins` > `Pin_<id>` > `PinRing_<id>`, `PinHalo_<id>`, `PinHit_<id>`, `PinTag_<id>` > `PinPlate_<id>`, `PinLabel_<id>` | under `Earth_Group` | Region pins (v4). Events `PinHover_<id>` and `PinClick_<id>` are on `PinHit_<id>`. |
+| `Caption_MODIS`, `Caption_VIIRS`, `Caption_VIIRS2012`, each with `CaptionPlate_<x>` and `CaptionText_<x>` | scene root | v5 captions: "MODIS · 1 km pixels", "VIIRS · 375 m pixels", "VIIRS · from 2012" |
+
+`<id>` is one of: indonesia, borneo_sumatra, mainland, malaysia, brunei, thailand, myanmar, laos, cambodia.
+
+### Events changed
+- `Click_Welcome` on `Earth_Surface` and `Stars_Far` no longer holds a SetVariable action. It is a sensor now, and the controller returns to `Welcome` on that click except in `Explore_*` states (v4).

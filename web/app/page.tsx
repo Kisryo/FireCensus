@@ -1,84 +1,205 @@
 "use client";
-// Home: scroll-driven story over the Spline globe (page-flow.md section 2).
+// One continuous story on one globe (page-flow.md section 2, extended):
+//   chapters 1-5 explain the problem and the method (Spline Welcome / Story_* states),
+//   chapters 6-8 walk through a real example with live data (Story_Example_* states, Spline v5),
+//   chapter 9 hands the globe to the visitor: click a pin, read the three answers.
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { api, type CalendarMonth, type Compare, type SeriesRow } from "@/lib/api";
+import { CASES, REGIONS, pinForArea } from "@/lib/regions";
+import { MONTHS, fmt } from "@/lib/colors";
+import { HistoryBars, SeasonChart, TrendChart } from "@/components/Charts";
+import GuidedExplore from "@/components/GuidedExplore";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const SplineScene = dynamic(() => import("@/components/SplineScene"), { ssr: false });
+const LATEST = { y: 2026, m: 10 };
 
-const STEPS = [
-  {
-    state: "Welcome",
-    kicker: "The problem",
-    title: "Every dry season, smoke covers Southeast Asia.",
-    body: "Satellites have watched these fires for 25 years. But the satellites changed, so the record can't be compared from one year to the next.",
-  },
-  {
-    state: "Welcome",
-    kicker: "Two generations",
-    title: "Five satellites, two kinds of eyes.",
-    body: "MODIS on Terra and Aqua (2000–) sees 1 km pixels. VIIRS on S-NPP, NOAA-20 and NOAA-21 (2012–) sees 375 m pixels and finds far more small fires. Switch from one to the other and fire counts jump 4×, even though the fires didn't change. Click a satellite to learn more.",
-  },
-  {
-    state: "Story_Scan",
-    kicker: "Nobody sees everything",
-    title: "Each satellite misses fires the others see.",
-    body: "Over Borneo, big fires are seen by every pass. Small peat fires are seen by one, or by none. In the afternoon window FireCensus uses three of them: Aqua, S-NPP and NOAA-20.",
-  },
-  {
-    state: "Story_Zoom",
-    kicker: "The idea",
-    title: "Ecologists count animals they can't fully see. We count fires the same way.",
-    body: "Each fire gets a capture history: (1,0,1) means Aqua and NOAA-20 saw it but S-NPP didn't. From thousands of these histories, capture-recapture statistics estimate how many fires no satellite saw, the (0,0,0) fires.",
-  },
-  {
-    state: "Story_Handoff",
-    kicker: "The result",
-    title: "One fire record, 2002–2026, where the sensor doesn't matter.",
-    body: "Remove a satellite and the raw counts move by 15–25%. The FireCensus estimate moves by 0–6%. When S-NPP went silent on 2 November 2026, nothing broke.",
-    cta: true,
-  },
+type Chapter = { scene: string; kicker: string; title: string; body: string; chart?: "q1" | "q2" | "q3"; explore?: boolean };
+const CHAPTERS: Chapter[] = [
+  { scene: "Welcome", kicker: "1 · The problem", title: "Every dry season, smoke covers Southeast Asia.",
+    body: "Satellites have watched these fires for 25 years. But the satellites changed, so the record can't be compared from one year to the next." },
+  { scene: "Story_Fleet", kicker: "2 · Two kinds of eyes", title: "Five satellites, two generations.",
+    body: "MODIS on Terra and Aqua (2000–) sees 1 km pixels. VIIRS on S-NPP, NOAA-20 and NOAA-21 (2012–) sees 375 m pixels and finds far more small fires. Switch from one to the other and fire counts jump about 4×, even though the fires didn't change." },
+  { scene: "Story_Scan", kicker: "3 · Nobody sees everything", title: "Each satellite misses fires the others see.",
+    body: "Over Borneo, big fires are seen by every pass. Small peat fires are seen by one, or by none. In the afternoon window we use three of them: Aqua, S-NPP and NOAA-20." },
+  { scene: "Story_Zoom", kicker: "4 · The idea", title: "We count fires the way ecologists count animals.",
+    body: "Each fire gets a capture history: (1,0,1) means Aqua and NOAA-20 saw it but S-NPP didn't. From thousands of these histories, capture-recapture statistics estimate how many fires no satellite saw, the (0,0,0) fires." },
+  { scene: "Story_Handoff", kicker: "5 · The result", title: "One fire record, 2002–2026, where the sensor doesn't matter.",
+    body: "Remove a satellite and raw counts move by 15–25%. FireCensus moves by 0–6%. When S-NPP went silent on 2 November 2026, nothing broke. Let's use it on a fire season that is happening right now." },
+  { scene: "Story_Example_Month", kicker: "6 · Is this month normal?", title: "", body: "", chart: "q1" },
+  { scene: "Story_Example_Season", kicker: "7 · When is the fire season?", title: "", body: "", chart: "q2" },
+  { scene: "Story_Example_Trend", kicker: "8 · Is the long-term trend real?", title: "", body: "", chart: "q3" },
+  { scene: "Explore_Overview", kicker: "9 · Your turn", title: "", body: "", explore: true },
 ];
+const EXPLORE = CHAPTERS.length - 1;
 
-export default function Home() {
+// ---------- live example: Indonesia ----------
+function useIndonesia() {
+  const [series, setSeries] = useState<SeriesRow[]>([]);
+  const [cal, setCal] = useState<{ critical_months: number[]; months: CalendarMonth[] } | null>(null);
+  const [cmp, setCmp] = useState<Compare | null>(null);
+  useEffect(() => {
+    const r = { country: "Indonesia" };
+    api.timeseries(r, "2002-07", "2026-11").then((t) => setSeries(t.series)).catch(() => {});
+    api.calendar(r).then(setCal).catch(() => {});
+    api.compare(r, 2026, 8).then(setCmp).catch(() => {});
+  }, []);
+  return useMemo(() => {
+    if (!series.length || !cal || !cmp) return null;
+    const hist = series.filter((r) => r.month === 8 && r.year >= 2003).map((r) => ({ year: r.year, n_hat: r.n_hat }));
+    const below = hist.filter((h) => h.year <= 2025 && h.n_hat < cmp.n_hat).length;
+    const raw = series.find((r) => r.year === 2026 && r.month === 8)?.aqua_raw ?? 0;
+    const cur = Array.from({ length: 12 }, (_, i) => series.find((r) => r.year === 2026 && r.month === i + 1)?.n_hat ?? null);
+    const years = Array.from({ length: 23 }, (_, i) => 2003 + i);
+    const sum = (y: number, f: (r: SeriesRow) => number) => series.filter((r) => r.year === y).reduce((a, r) => a + (f(r) || 0), 0);
+    const fc = years.map((y) => sum(y, (r) => r.n_hat)), naive = years.map((y) => sum(y, (r) => r.naive_best_sensor ?? 0)), modis = years.map((y) => sum(y, (r) => r.aqua_raw ?? 0));
+    const i12 = years.indexOf(2012), i11 = i12 - 1;
+    const idx = (v: number[]) => { const b = v.slice(i12).reduce((a, x) => a + x, 0) / (years.length - i12); return v.map((x) => (100 * x) / (b || 1)); };
+    const ms = cal.months; const peak = ms.reduce((a, b) => (b.n_median > a.n_median ? b : a), ms[0]); const cr = cal.critical_months;
+    return { cmp, hist, below, raw, cal, cur, peak: peak.month, first: cr[0], last: cr[cr.length - 1],
+      years, fc: idx(fc), naive: idx(naive), modis: idx(modis), jump: naive[i12] / (naive[i11] || 1), chg: (fc[i12] / (fc[i11] || 1) - 1) * 100 };
+  }, [series, cal, cmp]);
+}
+
+function ExampleCard({ chart, d }: { chart: "q1" | "q2" | "q3"; d: ReturnType<typeof useIndonesia> }) {
+  if (!d) return <p className="mt-3 text-slate-400">Loading Indonesia&apos;s fire record… (needs the API running)</p>;
+  if (chart === "q1") return (
+    <>
+      <h2 className="mt-2 text-2xl font-semibold leading-snug">
+        August 2026 in Indonesia: <span className="num">{fmt(d.cmp.n_hat)}</span> fires, <span className="text-fire">{d.cmp.ratio_to_median}×</span> a typical August.
+      </h2>
+      <p className="mt-2 text-[15px] leading-relaxed text-slate-300">
+        More than in {d.below} of the 23 Augusts since 2003, and the highest August since VIIRS began in 2012. A single satellite (MODIS) saw only {fmt(d.raw)} of them.
+        Raw pixel counts make this season look up to 16× normal. Harmonized, it is about 2×.
+      </p>
+      <div className="mt-3"><HistoryBars history={d.hist} year={2026} median={d.cmp.median} monthLabel="Aug" /></div>
+    </>
+  );
+  if (chart === "q2") return (
+    <>
+      <h2 className="mt-2 text-2xl font-semibold leading-snug">
+        Indonesia burns from <span className="text-fire">{MONTHS[d.first - 1]} to {MONTHS[d.last - 1]}</span>, peaking in {MONTHS[d.peak - 1]}.
+      </h2>
+      <p className="mt-2 text-[15px] leading-relaxed text-slate-300">
+        The blue line is a typical year (2003–2025); the shaded band is the usual range. The orange line is 2026: an early, strong start in August, and October well above normal.
+      </p>
+      <div className="mt-3"><SeasonChart months={d.cal.months} current={d.cur} year={2026} critical={d.cal.critical_months} /></div>
+    </>
+  );
+  return (
+    <>
+      <h2 className="mt-2 text-2xl font-semibold leading-snug">The 2012 jump is the satellite, not the fires.</h2>
+      <p className="mt-2 text-[15px] leading-relaxed text-slate-300">
+        If you always use the newest satellite, Indonesia&apos;s fire count jumps <b className="text-fire">×{d.jump.toFixed(1)}</b> when VIIRS arrives in 2012.
+        FireCensus changes by <b className="text-sat">{d.chg > 0 ? "+" : ""}{d.chg.toFixed(0)}%</b>. The real story is in the peaks: 2006, 2015, 2019 and 2023 were El Niño or drought years.
+      </p>
+      <div className="mt-3"><TrendChart years={d.years} series={[
+        { label: "FireCensus (harmonized)", color: "#4FC3F7", values: d.fc },
+        { label: "Newest satellite (raw)", color: "#FF6B35", values: d.naive, dashed: true },
+        { label: "MODIS only (raw)", color: "#94a3b8", values: d.modis, dashed: true },
+      ]} /></div>
+    </>
+  );
+}
+
+function RegionPicker({ pick, pickCase }: { pick: (id: string) => void; pickCase: (id: string) => void }) {
+  return (
+    <>
+      <h2 className="mt-2 text-2xl font-semibold leading-snug">Now pick any region.</h2>
+      <p className="mt-2 text-[15px] text-slate-300"><b>Click a glowing pin on the globe</b>, or choose below. You&apos;ll get the same three answers for any area and any month since 2002.</p>
+      <div className="mt-4 grid grid-cols-2 gap-1.5">
+        {REGIONS.map((r) => (
+          <button key={r.id} className="btn text-left" onClick={() => pick(r.id)}>
+            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-fire shadow-[0_0_8px_#FF6B35]" />{r.name}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 label">Featured stories</div>
+      <div className="mt-2 space-y-1.5">
+        {CASES.map((c) => (
+          <button key={c.id} className="btn w-full text-left" onClick={() => pickCase(c.id)}>
+            <div className="text-[14px]">{c.title}</div>
+            <div className="text-[11px] text-slate-500">{c.kicker}</div>
+          </button>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-slate-500">
+        Want the full toolkit? <Link href="/explore/advanced" className="text-sat underline">3D skyline, map & CSV</Link> · <Link href="/explore?flat=1" className="text-sat underline">2D version</Link>
+      </p>
+    </>
+  );
+}
+
+function StoryInner() {
+  const params = useSearchParams();
   const [step, setStep] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const [mobile, setMobile] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const [flat, setFlat] = useState(false);
+  const refs = useRef<(HTMLElement | null)[]>([]);
+  const d = useIndonesia();
+
+  // chapter 9 state: which area the visitor picked
+  const initCase = CASES.find((c) => c.id === params.get("case"));
+  const initCountry = params.get("country");
+  const [area, setArea] = useState<string | null>(initCase ? `case:${initCase.id}` : initCountry ? `country:${initCountry}` : null);
+  const [ym, setYm] = useState(initCase ? { y: initCase.year, m: initCase.month } : LATEST);
 
   useEffect(() => {
     api.health().catch(() => {}); // wake the backend early
-    const onRej = (e: PromiseRejectionEvent) => {
-      if (String(e.reason).includes("fetch") || String(e.reason).toLowerCase().includes("spline")) { e.preventDefault(); setFailed(true); setLoaded(true); }
-    };
-    window.addEventListener("unhandledrejection", onRej);
-    const giveUp = setTimeout(() => setLoaded(true), 20000); // never trap the visitor behind the loader
-    setMobile(window.innerWidth < 768);
+    setFlat(window.innerWidth < 1024);
     const io = new IntersectionObserver(
       (es) => es.forEach((e) => e.isIntersecting && setStep(Number((e.target as HTMLElement).dataset.i))),
       { rootMargin: "-45% 0px -45% 0px" }
     );
     refs.current.forEach((r) => r && io.observe(r));
+    const onRej = (e: PromiseRejectionEvent) => {
+      if (String(e.reason).includes("fetch") || String(e.reason).toLowerCase().includes("spline")) { e.preventDefault(); setFlat(true); setLoaded(true); }
+    };
+    window.addEventListener("unhandledrejection", onRej);
+    const giveUp = setTimeout(() => setLoaded(true), 20000);
+    // deep link: /#explore or ?case= / ?country= jumps straight to chapter 9
+    if (window.location.hash === "#explore" || initCase || initCountry) {
+      setTimeout(() => refs.current[EXPLORE]?.scrollIntoView({ behavior: "auto", block: "start" }), 300);
+    }
     return () => { io.disconnect(); window.removeEventListener("unhandledrejection", onRej); clearTimeout(giveUp); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pick = useCallback((id: string) => {
+    const r = REGIONS.find((x) => x.id === id);
+    if (r) { setArea(r.areaKey); setYm(LATEST); }
+  }, []);
+  const pickCase = (id: string) => {
+    const c = CASES.find((x) => x.id === id)!;
+    setArea(`case:${c.id}`); setYm({ y: c.year, m: c.month });
+  };
+  const onStateChange = useCallback((v: string) => {
+    if (!v?.startsWith("Explore_") || v === "Explore_Overview") return;
+    const id = v.slice("Explore_".length);
+    setStep((s) => {
+      if (s === EXPLORE) setArea((cur) => (cur && pinForArea(cur) === id ? cur : REGIONS.find((r) => r.id === id)?.areaKey ?? cur));
+      return s;
+    });
+  }, []);
+
+  const scene = step === EXPLORE ? (area ? `Explore_${pinForArea(area)}` : "Explore_Overview") : CHAPTERS[step].scene;
 
   return (
     <main className="relative">
-      {/* sticky globe */}
       <div className="fixed inset-0 z-0">
-        {mobile || failed ? (
-          <div className="h-full w-full bg-[radial-gradient(circle_at_60%_45%,#16305a_0%,#0B0F1A_60%)]" />
+        {flat ? (
+          <div className="h-full w-full bg-[radial-gradient(circle_at_68%_45%,#16305a_0%,#0B0F1A_60%)]" />
         ) : (
-          <ErrorBoundary fallback={null} onError={() => { setFailed(true); setLoaded(true); }}>
-            <SplineScene state={STEPS[step].state} onLoaded={() => setLoaded(true)} />
+          <ErrorBoundary fallback={null} onError={() => { setFlat(true); setLoaded(true); }}>
+            <SplineScene state={scene} onLoaded={() => setLoaded(true)} onStateChange={onStateChange} />
           </ErrorBoundary>
         )}
       </div>
-      {!loaded && !mobile && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-space">
+      {!loaded && !flat && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-space">
           <div className="text-center">
             <div className="mx-auto mb-4 h-3 w-3 animate-ping rounded-full bg-fire" />
             <p className="text-slate-400">Waking up 5 satellites…</p>
@@ -86,33 +207,51 @@ export default function Home() {
         </div>
       )}
 
-      <Link href="/explore" className="btn fixed bottom-5 right-5 z-30 bg-space/80">Skip story →</Link>
-
-      {/* progress dots */}
-      <div className="fixed left-5 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2 md:flex">
-        {STEPS.map((_, i) => (
-          <span key={i} className={`h-2 w-2 rounded-full ${i === step ? "bg-fire" : "bg-white/25"}`} />
+      {/* chapter dots */}
+      <nav className="fixed left-4 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2 md:flex" aria-label="Chapters">
+        {CHAPTERS.map((c, i) => (
+          <button key={i} title={c.kicker} onClick={() => refs.current[i]?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            className={`h-2.5 w-2.5 rounded-full ${i === step ? "bg-fire" : i >= 5 ? "bg-sat/40" : "bg-white/25"}`} />
         ))}
-      </div>
+      </nav>
+      {step < EXPLORE && (
+        <button className="btn fixed bottom-5 right-5 z-30 bg-space/80" onClick={() => refs.current[EXPLORE]?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+          Skip to explore ↓
+        </button>
+      )}
 
-      {/* scrolling text cards */}
+      {/* left reading column on a dark gradient; the globe stays visible on the right */}
       <div className="pointer-events-none relative z-20">
-        {STEPS.map((s, i) => (
-          <div key={i} ref={(el) => { refs.current[i] = el; }} data-i={i} className="flex min-h-screen items-center px-6 md:px-16">
-            <div className={`card pointer-events-auto max-w-md p-6 transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-40"}`}>
-              <div className="label text-fire">{s.kicker}</div>
-              <h2 className="mt-2 text-2xl font-semibold leading-snug">{s.title}</h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-slate-300">{s.body}</p>
-              {s.cta && (
-                <Link href="/explore?case=indonesia-2026" className="mt-5 inline-block rounded-lg bg-fire px-4 py-2 font-semibold text-black hover:brightness-110">
-                  Explore the burning calendar →
-                </Link>
-              )}
+        {CHAPTERS.map((c, i) => (
+          <section key={i} id={i === EXPLORE ? "explore" : undefined} ref={(el) => { refs.current[i] = el; }} data-i={i}
+            className={`flex ${c.explore ? "min-h-screen items-start pt-16" : "min-h-screen items-center"} px-6 md:pl-14`}>
+            <div className={`pointer-events-auto w-full ${c.chart || c.explore ? "max-w-[560px]" : "max-w-md"} transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-35"}`}>
+              <div className="card p-6">
+                <div className={`label ${i >= 5 ? "text-sat" : "text-fire"}`}>{c.kicker}</div>
+                {c.title && <h2 className="mt-2 text-2xl font-semibold leading-snug">{c.title}</h2>}
+                {c.body && <p className="mt-3 text-[15px] leading-relaxed text-slate-300">{c.body}</p>}
+                {c.chart && <ExampleCard chart={c.chart} d={d} />}
+                {c.explore && !area && <RegionPicker pick={pick} pickCase={pickCase} />}
+                {c.explore && area && (
+                  <div className="-mx-5 -mb-6">
+                    <div className="px-5"><button className="btn mt-3 text-sm" onClick={() => setArea(null)}>← All regions</button></div>
+                    <GuidedExplore compact area={area} onArea={setArea} initYear={ym.y} initMonth={ym.m} onAreaPicked={(_, y, m) => setYm({ y, m })} />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </section>
         ))}
-        <div className="h-[30vh]" />
+        <div className="h-[20vh]" />
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="pt-24 text-center text-slate-400">Loading…</div>}>
+      <StoryInner />
+    </Suspense>
   );
 }

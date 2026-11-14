@@ -1,11 +1,11 @@
 "use client";
-// Spline globe (states: Welcome, Focus_*, Story_Scan, Story_Zoom, Story_Handoff), driven by the `scene` variable.
+// Spline globe (states: Welcome, Focus_*, Story_Scan, Story_Zoom, Story_Handoff, Story_Fleet, Story_Example_*, Explore_*), driven by the `scene` variable.
 // Adapted from FireCensusScene.jsx (Spline build). Debug number keys only with ?debug=1.
 import Spline from "@splinetool/react-spline";
 import { useEffect, useRef } from "react";
 
 export const SCENE_URL = "https://prod.spline.design/i6gXDIRfGjWXMnZA/scene.splinecode";
-const STATES = ["Welcome", "Focus_Terra", "Focus_Aqua", "Focus_SNPP", "Focus_NOAA20", "Focus_NOAA21", "Story_Scan", "Story_Zoom", "Story_Handoff"];
+const STATES = ["Welcome", "Focus_Terra", "Focus_Aqua", "Focus_SNPP", "Focus_NOAA20", "Focus_NOAA21", "Story_Scan", "Story_Zoom", "Story_Handoff", "Story_Fleet", "Story_Example_Month", "Story_Example_Season", "Story_Example_Trend"];
 
 export default function SplineScene({ state, onLoaded, onStateChange }: {
   state: string; onLoaded?: () => void; onStateChange?: (s: string) => void;

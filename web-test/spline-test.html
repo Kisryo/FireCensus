@@ -34,6 +34,11 @@ import { Application } from 'https://unpkg.com/@splinetool/runtime/build/runtime
 
 const SCENE_URL = 'https://prod.spline.design/i6gXDIRfGjWXMnZA/scene.splinecode';
 const STATES = ['Welcome','Focus_Terra','Focus_Aqua','Focus_SNPP','Focus_NOAA20','Focus_NOAA21','Story_Scan','Story_Zoom','Story_Handoff'];
+// v4 Explore states (buttons only; number keys 1–9 stay on the states above)
+const EXPLORE = ['Explore_Overview','Explore_indonesia','Explore_borneo_sumatra','Explore_mainland','Explore_malaysia',
+  'Explore_brunei','Explore_thailand','Explore_myanmar','Explore_laos','Explore_cambodia'];
+// v5 story states; with ?debug=1 the letter keys f / m / s / t switch to them
+const STORY_V5 = { f: 'Story_Fleet', m: 'Story_Example_Month', s: 'Story_Example_Season', t: 'Story_Example_Trend' };
 const logEl = document.getElementById('log');
 const log = (...a) => { logEl.textContent += '\n' + a.map(x => typeof x === 'object' ? JSON.stringify(x) : x).join(' '); logEl.scrollTop = 1e9; };
 
@@ -55,7 +60,27 @@ app.load(SCENE_URL).then(() => {
     b.onclick = () => set(numeric ? i + 1 : s);
     btns.appendChild(b);
   });
-  ['mouseDown', 'mouseHover'].forEach(ev => app.addEventListener(ev, e => log(ev + ':', e.target && e.target.name)));
+  const h5 = document.createElement('h3'); h5.textContent = 'Story（v5）'; btns.appendChild(h5);
+  Object.entries(STORY_V5).forEach(([k, s]) => {
+    const b = document.createElement('button');
+    b.textContent = k + '  ' + s;
+    b.onclick = () => set(s);
+    btns.appendChild(b);
+  });
+  const h = document.createElement('h3'); h.textContent = 'Explore（v4）'; btns.appendChild(h);
+  EXPLORE.forEach(s => {
+    const b = document.createElement('button');
+    b.textContent = s;
+    b.onclick = () => set(s);
+    btns.appendChild(b);
+  });
+  // mouseDown targets are logged so pin clicks (Pin_* / PinHit_*) are visible; hover too
+  ['mouseDown', 'mouseHover'].forEach(ev => app.addEventListener(ev, e => {
+    const n = e.target && e.target.name;
+    const pin = ev === 'mouseDown' && n && n.startsWith('Pin');
+    log((pin ? '📍 ' : '') + ev + ':', n);
+    if (pin) setTimeout(() => log('   scene 现在 =', app.getVariable ? app.getVariable('scene') : '?'), 200);
+  }));
 }).catch(e => { logEl.textContent = '❌ 载入失败: ' + e.message; });
 
 function set(v) {
@@ -68,13 +93,15 @@ function set(v) {
 // Number keys 1–9 switch states ONLY when the URL has ?debug=1, and never while typing in a field
 // (so a date input on the real site can't trigger a state change).
 const DEBUG_KEYS = new URLSearchParams(location.search).get('debug') === '1';
-if (DEBUG_KEYS) log('🔧 debug=1：数字键 1–9 可切换状态');
+if (DEBUG_KEYS) log('🔧 debug=1：数字键 1–9、字母键 f / m / s / t 可切换状态');
 window.addEventListener('keydown', e => {
   if (!DEBUG_KEYS || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   const i = '123456789'.indexOf(e.key);
-  if (i >= 0) set(STATES[i]);
+  if (i >= 0) { set(STATES[i]); return; }
+  const k = (e.key || '').toLowerCase();
+  if (STORY_V5[k]) set(STORY_V5[k]);
 });
 
 document.getElementById('custom').addEventListener('keydown', e => {

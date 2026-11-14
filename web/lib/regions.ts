@@ -92,3 +92,30 @@ export const CASES: Case[] = [
     ],
   },
 ];
+
+// ---- Spline globe pins (scene v4). Pin ids must match Spline object names Pin_<id> / PinHit_<id>
+//      and scene states Explore_<id>.
+export type PinRegion = { id: string; name: string; region: { country?: string; bbox?: string }; areaKey: string };
+
+export const REGIONS: PinRegion[] = [
+  { id: "indonesia", name: "Indonesia", region: { country: "Indonesia" }, areaKey: "country:Indonesia" },
+  { id: "borneo_sumatra", name: "Borneo & Sumatra", region: { bbox: "95,-6,120,6" }, areaKey: "region:borneo_sumatra" },
+  { id: "mainland", name: "Mainland SE Asia", region: { bbox: "92,10,110,24" }, areaKey: "region:mainland" },
+  { id: "malaysia", name: "Malaysia", region: { country: "Malaysia" }, areaKey: "country:Malaysia" },
+  { id: "brunei", name: "Brunei", region: { country: "Brunei_Darussalam" }, areaKey: "country:Brunei_Darussalam" },
+  { id: "thailand", name: "Thailand", region: { country: "Thailand" }, areaKey: "country:Thailand" },
+  { id: "myanmar", name: "Myanmar", region: { country: "Myanmar" }, areaKey: "country:Myanmar" },
+  { id: "laos", name: "Laos", region: { country: "Lao_PDR" }, areaKey: "country:Lao_PDR" },
+  { id: "cambodia", name: "Cambodia", region: { country: "Cambodia" }, areaKey: "country:Cambodia" },
+];
+
+/** Which globe pin shows a given panel area (case:/country:/region: key). */
+export function pinForArea(key: string): string {
+  const [kind, id] = key.split(":");
+  if (kind === "region") return id;
+  if (kind === "country") return REGIONS.find((r) => r.region.country === id)?.id ?? "indonesia";
+  const c = CASES.find((x) => x.id === id);
+  if (!c) return "indonesia";
+  if (c.country) return REGIONS.find((r) => r.region.country === c.country)?.id ?? "indonesia";
+  return c.id === "mainland-2020" ? "mainland" : "borneo_sumatra";
+}
