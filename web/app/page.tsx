@@ -219,10 +219,18 @@ function StoryInner() {
             className={`h-2.5 w-2.5 rounded-full ${i === step ? "bg-fire" : i >= 5 ? "bg-sat/40" : "bg-white/25"}`} />
         ))}
       </nav>
-      {step < EXPLORE && (
-        <button className="btn fixed bottom-5 right-5 z-30 bg-space/80" onClick={() => refs.current[EXPLORE]?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-          Skip to explore ↓
-        </button>
+        <div className="fixed bottom-3 right-3 z-[25] flex h-[112px] w-[410px] flex-col justify-center gap-2 rounded-2xl border border-line bg-[#0B0F1A] px-5">
+          {step < EXPLORE ? (
+            <button className="btn self-start bg-space" onClick={() => refs.current[EXPLORE]?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Skip to explore ↓
+            </button>
+          ) : (
+            <div className="text-sm font-semibold text-white">Pick a region to dive in</div>
+          )}
+          <div className="text-[11px] leading-snug text-slate-500">
+            Fire data: NASA FIRMS (MODIS, VIIRS) · Earth: NASA Blue Marble · 3D globe made with Spline
+          </div>
+        </div>
       )}
 
       {/* left reading column on a dark gradient; the globe stays visible on the right */}
