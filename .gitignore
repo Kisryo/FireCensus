@@ -26,7 +26,3 @@ out/
 .DS_Store
 Thumbs.db
 
-# >>> TEMP batch upload (remove after all pushes)
-data/interim/detections/*_201[4-9].parquet
-data/interim/detections/*_202[0-9].parquet
-# <<< TEMP
