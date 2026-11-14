@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/", label: "Story" },
-  { href: "/#explore", label: "Explore" },
   { href: "/cases", label: "Cases" },
   { href: "/method", label: "Method" },
 ];
@@ -23,7 +22,7 @@ export default function Nav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`rounded-md px-3 py-1 ${(l.href === "/" ? path === "/" : l.href === "/#explore" ? path.startsWith("/explore") : path.startsWith(l.href)) ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+              className={`rounded-md px-3 py-1 ${(l.href === "/" ? path === "/" : path.startsWith(l.href)) ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
             >
               {l.label}
             </Link>
