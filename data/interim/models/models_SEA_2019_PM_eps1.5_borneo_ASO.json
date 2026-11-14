@@ -1,0 +1,97 @@
+{
+  "region": "SEA",
+  "year": 2019,
+  "eps": 1.5,
+  "window": "PM",
+  "tag": "borneo_ASO",
+  "n_fires": 55382,
+  "converged": true,
+  "coefs": {
+    "Aqua": {
+      "intercept": -3.9982,
+      "log_frp": 1.3708,
+      "log_area": -1.6642
+    },
+    "SNPP": {
+      "intercept": -3.9363,
+      "log_frp": 0.7056,
+      "log_area": -1.2808
+    },
+    "NOAA20": {
+      "intercept": -4.0048,
+      "log_frp": 0.7448,
+      "log_area": -1.2948
+    }
+  },
+  "se": {
+    "Aqua": {
+      "intercept": 0.0402,
+      "log_frp": 0.0157,
+      "log_area": 0.0236
+    },
+    "SNPP": {
+      "intercept": 0.0557,
+      "log_frp": 0.012,
+      "log_area": 0.0311
+    },
+    "NOAA20": {
+      "intercept": 0.0545,
+      "log_frp": 0.0121,
+      "log_area": 0.0301
+    }
+  },
+  "frp50": {
+    "Aqua": {
+      "A=0.2": 2.6,
+      "A=0.5": 8.0,
+      "A=1.0": 18.5,
+      "A=2.0": 42.9,
+      "A=4.0": 99.5
+    },
+    "SNPP": {
+      "A=0.2": 14.3,
+      "A=0.5": 75.2,
+      "A=1.0": 264.7,
+      "A=2.0": 931.6,
+      "A=4.0": 3278.2
+    },
+    "NOAA20": {
+      "A=0.2": 13.2,
+      "A=0.5": 64.8,
+      "A=1.0": 216.4,
+      "A=2.0": 722.0,
+      "A=4.0": 2409.1
+    }
+  },
+  "N_ht_full_availability": 85556,
+  "mse": [
+    {
+      "model": "independent",
+      "n_observed": 52188,
+      "n_missed_by_all": 22114,
+      "N_hat": 74302,
+      "aic": 3923.1
+    },
+    {
+      "model": "VIIRS pair (s:n)",
+      "n_observed": 52188,
+      "n_missed_by_all": 12656,
+      "N_hat": 64844,
+      "aic": 3157.6
+    },
+    {
+      "model": "s:n + a:s",
+      "n_observed": 52188,
+      "n_missed_by_all": 20192,
+      "N_hat": 72380,
+      "aic": 2532.1
+    },
+    {
+      "model": "all pairs",
+      "n_observed": 52188,
+      "n_missed_by_all": 91935,
+      "N_hat": 144123,
+      "aic": NaN
+    }
+  ]
+}

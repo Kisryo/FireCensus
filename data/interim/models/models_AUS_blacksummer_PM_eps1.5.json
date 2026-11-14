@@ -1,0 +1,72 @@
+{
+  "coefs": {
+    "Aqua": {
+      "intercept": -4.461,
+      "log_frp": 1.66,
+      "log_area": -1.589
+    },
+    "SNPP": {
+      "intercept": -1.9714,
+      "log_frp": 0.8642,
+      "log_area": -0.2733
+    },
+    "NOAA20": {
+      "intercept": -2.1447,
+      "log_frp": 0.8608,
+      "log_area": -0.2964
+    }
+  },
+  "se": {
+    "Aqua": {
+      "intercept": 0.0852,
+      "log_frp": 0.0311,
+      "log_area": 0.0476
+    },
+    "SNPP": {
+      "intercept": 0.1368,
+      "log_frp": 0.0246,
+      "log_area": 0.0751
+    },
+    "NOAA20": {
+      "intercept": 0.1307,
+      "log_frp": 0.0236,
+      "log_area": 0.0696
+    }
+  },
+  "N_ht": 13729,
+  "n_obs": 11275,
+  "mse": [
+    {
+      "model": "independent",
+      "n_observed": 11275,
+      "n_missed_by_all": 833,
+      "N_hat": 12108,
+      "aic": 2131.6,
+      "x": 1.07
+    },
+    {
+      "model": "VIIRS pair (s:n)",
+      "n_observed": 11275,
+      "n_missed_by_all": 701,
+      "N_hat": 11976,
+      "aic": 2121.9,
+      "x": 1.06
+    },
+    {
+      "model": "s:n + a:s",
+      "n_observed": 11275,
+      "n_missed_by_all": 3090,
+      "N_hat": 14365,
+      "aic": 1281.4,
+      "x": 1.27
+    },
+    {
+      "model": "all pairs",
+      "n_observed": 11275,
+      "n_missed_by_all": 20147,
+      "N_hat": 31422,
+      "aic": NaN,
+      "x": 2.79
+    }
+  ]
+}

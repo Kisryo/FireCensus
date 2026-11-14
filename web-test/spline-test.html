@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>FireCensus · Spline 场景测试</title>
+<style>
+  body { margin:0; background:#0B0F1A; color:#E6EDF3; font:14px system-ui, sans-serif; display:flex; height:100vh; }
+  #panel { width:300px; padding:14px; overflow:auto; border-right:1px solid #223; box-sizing:border-box; }
+  #stage { flex:1; position:relative; }
+  canvas { width:100%; height:100%; display:block; }
+  button { display:block; width:100%; margin:4px 0; padding:8px; background:#14213A; color:#E6EDF3; border:1px solid #2B4A7A; border-radius:6px; cursor:pointer; text-align:left; }
+  button:hover { background:#1E3358; }
+  h3 { margin:12px 0 6px; color:#4FC3F7; font-size:13px; }
+  #log { font:12px ui-monospace, monospace; white-space:pre-wrap; background:#070A12; padding:8px; border-radius:6px; max-height:300px; overflow:auto; }
+  input { width:100%; box-sizing:border-box; padding:6px; background:#070A12; color:#E6EDF3; border:1px solid #2B4A7A; border-radius:6px; }
+  #fps { position:absolute; top:8px; right:12px; background:#000a; padding:4px 8px; border-radius:4px; font:12px monospace; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <b>FireCensus 场景测试</b>
+  <div style="opacity:.7;font-size:12px">用和网站相同的方式（setVariable）切换状态</div>
+  <h3>状态</h3>
+  <div id="btns"></div>
+  <h3>手动输入 scene 值</h3>
+  <input id="custom" placeholder="例如 Story_Scan 或 7，按 Enter">
+  <h3>诊断记录</h3>
+  <div id="log">载入中…</div>
+</div>
+<div id="stage"><canvas id="c3d"></canvas><div id="fps">FPS –</div></div>
+
+<script type="module">
+import { Application } from 'https://unpkg.com/@splinetool/runtime/build/runtime.js';
+
+const SCENE_URL = 'https://prod.spline.design/i6gXDIRfGjWXMnZA/scene.splinecode';
+const STATES = ['Welcome','Focus_Terra','Focus_Aqua','Focus_SNPP','Focus_NOAA20','Focus_NOAA21','Story_Scan','Story_Zoom','Story_Handoff'];
+const logEl = document.getElementById('log');
+const log = (...a) => { logEl.textContent += '\n' + a.map(x => typeof x === 'object' ? JSON.stringify(x) : x).join(' '); logEl.scrollTop = 1e9; };
+
+const app = new Application(document.getElementById('c3d'));
+const t0 = performance.now();
+app.load(SCENE_URL).then(() => {
+  logEl.textContent = '✅ 场景载入完成 (' + ((performance.now() - t0) / 1000).toFixed(1) + ' 秒)';
+  let vars = {};
+  try { vars = app.getVariables(); } catch (e) { log('getVariables 出错', e.message); }
+  log('场景变量:', vars);
+  if (!('scene' in vars)) log('⚠️ 找不到名为 "scene" 的变量 —— 这就是切换失败的原因');
+  const numeric = typeof vars.scene === 'number';
+  log('scene 变量类型:', typeof vars.scene, numeric ? '(用数字 1–9)' : '(用状态名字)');
+
+  const btns = document.getElementById('btns');
+  STATES.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.textContent = (i + 1) + '  ' + s;
+    b.onclick = () => set(numeric ? i + 1 : s);
+    btns.appendChild(b);
+  });
+  ['mouseDown', 'mouseHover'].forEach(ev => app.addEventListener(ev, e => log(ev + ':', e.target && e.target.name)));
+}).catch(e => { logEl.textContent = '❌ 载入失败: ' + e.message; });
+
+function set(v) {
+  try {
+    app.setVariable('scene', v);
+    const now = app.getVariable ? app.getVariable('scene') : app.getVariables().scene;
+    log('→ setVariable("scene", ' + JSON.stringify(v) + ')  现在 =', now);
+  } catch (e) { log('setVariable 出错:', e.message); }
+}
+// Number keys 1–9 switch states ONLY when the URL has ?debug=1, and never while typing in a field
+// (so a date input on the real site can't trigger a state change).
+const DEBUG_KEYS = new URLSearchParams(location.search).get('debug') === '1';
+if (DEBUG_KEYS) log('🔧 debug=1：数字键 1–9 可切换状态');
+window.addEventListener('keydown', e => {
+  if (!DEBUG_KEYS || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const i = '123456789'.indexOf(e.key);
+  if (i >= 0) set(STATES[i]);
+});
+
+document.getElementById('custom').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const v = e.target.value.trim(); set(/^\d+$/.test(v) ? Number(v) : v); }
+});
+
+// FPS meter
+let frames = 0, last = performance.now();
+(function tick(now) {
+  frames++;
+  if (now - last > 1000) { document.getElementById('fps').textContent = 'FPS ' + frames; frames = 0; last = now; }
+  requestAnimationFrame(tick);
+})(performance.now());
+</script>
+</body>
+</html>

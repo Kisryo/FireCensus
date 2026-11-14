@@ -1,0 +1,40 @@
+{
+  "frp_map": {
+    "a": 0.5162456500591294,
+    "b": 0.6350586312984103
+  },
+  "coefs": {
+    "Aqua": {
+      "intercept": -4.6131,
+      "log_frp": 1.5997,
+      "log_area": -1.4476
+    },
+    "SNPP": {
+      "intercept": -4.3423,
+      "log_frp": 0.7322,
+      "log_area": -1.6169
+    },
+    "NOAA20": {
+      "intercept": -4.9657,
+      "log_frp": 0.8291,
+      "log_area": -1.9128
+    }
+  },
+  "se": {
+    "Aqua": {
+      "intercept": 0.0107,
+      "log_frp": 0.0046,
+      "log_area": 0.0064
+    },
+    "SNPP": {
+      "intercept": 0.0176,
+      "log_frp": 0.0041,
+      "log_area": 0.0097
+    },
+    "NOAA20": {
+      "intercept": 0.0224,
+      "log_frp": 0.0051,
+      "log_area": 0.0125
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# --- large data (rebuild with pipeline/ ; raw FIRMS CSVs live outside the repo) ---
+data/raw/
+# data/interim/ is committed in the PRIVATE repo so teammates can use it (all files < 100 MB)
+# fires_weighted is 311 MB (> GitHub 100 MB limit); rebuild: cd pipeline && python s3_backcast.py final
+data/product/fires_weighted_*.parquet
+*.part
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# --- node / next.js ---
+node_modules/
+.next/
+out/
+.vercel/
+
+# --- secrets & local ---
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# >>> TEMP batch upload (remove after all pushes)
+data/interim/detections/
+# <<< TEMP

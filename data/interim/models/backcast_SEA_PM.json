@@ -1,0 +1,587 @@
+{
+  "frp_map": {
+    "a": 0.5162456500591294,
+    "b": 0.6350586312984103
+  },
+  "coefs": {
+    "Aqua": {
+      "intercept": -4.6131,
+      "log_frp": 1.5997,
+      "log_area": -1.4476
+    },
+    "SNPP": {
+      "intercept": -4.3423,
+      "log_frp": 0.7322,
+      "log_area": -1.6169
+    },
+    "NOAA20": {
+      "intercept": -4.9657,
+      "log_frp": 0.8291,
+      "log_area": -1.9128
+    }
+  },
+  "se": {
+    "Aqua": {
+      "intercept": 0.0107,
+      "log_frp": 0.0046,
+      "log_area": 0.0064
+    },
+    "SNPP": {
+      "intercept": 0.0176,
+      "log_frp": 0.0041,
+      "log_area": 0.0097
+    },
+    "NOAA20": {
+      "intercept": 0.0224,
+      "log_frp": 0.0051,
+      "log_area": 0.0125
+    }
+  },
+  "R": [
+    {
+      "subregion": "mainland",
+      "month": 1,
+      "R": 2.062,
+      "ratio_raw": 14.29
+    },
+    {
+      "subregion": "mainland",
+      "month": 2,
+      "R": 2.588,
+      "ratio_raw": 16.177
+    },
+    {
+      "subregion": "mainland",
+      "month": 3,
+      "R": 2.236,
+      "ratio_raw": 12.427
+    },
+    {
+      "subregion": "mainland",
+      "month": 4,
+      "R": 2.385,
+      "ratio_raw": 12.178
+    },
+    {
+      "subregion": "mainland",
+      "month": 5,
+      "R": 3.429,
+      "ratio_raw": 19.536
+    },
+    {
+      "subregion": "mainland",
+      "month": 6,
+      "R": 3.026,
+      "ratio_raw": 21.131
+    },
+    {
+      "subregion": "mainland",
+      "month": 7,
+      "R": 3.191,
+      "ratio_raw": 22.616
+    },
+    {
+      "subregion": "mainland",
+      "month": 8,
+      "R": 3.92,
+      "ratio_raw": 29.24
+    },
+    {
+      "subregion": "mainland",
+      "month": 9,
+      "R": 2.936,
+      "ratio_raw": 24.452
+    },
+    {
+      "subregion": "mainland",
+      "month": 10,
+      "R": 3.005,
+      "ratio_raw": 25.07
+    },
+    {
+      "subregion": "mainland",
+      "month": 11,
+      "R": 3.707,
+      "ratio_raw": 29.702
+    },
+    {
+      "subregion": "mainland",
+      "month": 12,
+      "R": 2.27,
+      "ratio_raw": 17.007
+    },
+    {
+      "subregion": "maritime",
+      "month": 1,
+      "R": 1.958,
+      "ratio_raw": 13.791
+    },
+    {
+      "subregion": "maritime",
+      "month": 2,
+      "R": 2.136,
+      "ratio_raw": 13.98
+    },
+    {
+      "subregion": "maritime",
+      "month": 3,
+      "R": 2.046,
+      "ratio_raw": 13.806
+    },
+    {
+      "subregion": "maritime",
+      "month": 4,
+      "R": 1.825,
+      "ratio_raw": 13.659
+    },
+    {
+      "subregion": "maritime",
+      "month": 5,
+      "R": 1.757,
+      "ratio_raw": 13.571
+    },
+    {
+      "subregion": "maritime",
+      "month": 6,
+      "R": 1.748,
+      "ratio_raw": 12.211
+    },
+    {
+      "subregion": "maritime",
+      "month": 7,
+      "R": 1.798,
+      "ratio_raw": 12.491
+    },
+    {
+      "subregion": "maritime",
+      "month": 8,
+      "R": 1.865,
+      "ratio_raw": 12.091
+    },
+    {
+      "subregion": "maritime",
+      "month": 9,
+      "R": 1.923,
+      "ratio_raw": 11.863
+    },
+    {
+      "subregion": "maritime",
+      "month": 10,
+      "R": 2.396,
+      "ratio_raw": 14.497
+    },
+    {
+      "subregion": "maritime",
+      "month": 11,
+      "R": 2.547,
+      "ratio_raw": 15.901
+    },
+    {
+      "subregion": "maritime",
+      "month": 12,
+      "R": 2.199,
+      "ratio_raw": 15.727
+    }
+  ],
+  "validation_E2": {
+    "months_evaluated": 240,
+    "median_abs_error_pct": {
+      "firecensus": 12.5,
+      "ratio_baseline": 14.0
+    },
+    "log_correlation": {
+      "firecensus": 0.988,
+      "ratio_baseline": 0.986
+    },
+    "peak_months_median_abs_error_pct": {
+      "firecensus": 5.6,
+      "ratio_baseline": 7.5
+    }
+  },
+  "yearly": [
+    {
+      "year": 2002,
+      "subregion": "mainland",
+      "N_hat": 32143.5,
+      "aqua_raw": 1493,
+      "observed": 1493,
+      "x_aqua": 21.5
+    },
+    {
+      "year": 2002,
+      "subregion": "maritime",
+      "N_hat": 605914.8,
+      "aqua_raw": 49718,
+      "observed": 49718,
+      "x_aqua": 12.2
+    },
+    {
+      "year": 2003,
+      "subregion": "mainland",
+      "N_hat": 1022146.4,
+      "aqua_raw": 73268,
+      "observed": 73268,
+      "x_aqua": 14.0
+    },
+    {
+      "year": 2003,
+      "subregion": "maritime",
+      "N_hat": 397813.0,
+      "aqua_raw": 31905,
+      "observed": 31905,
+      "x_aqua": 12.5
+    },
+    {
+      "year": 2004,
+      "subregion": "mainland",
+      "N_hat": 1445926.2,
+      "aqua_raw": 104110,
+      "observed": 104110,
+      "x_aqua": 13.9
+    },
+    {
+      "year": 2004,
+      "subregion": "maritime",
+      "N_hat": 624551.4,
+      "aqua_raw": 50096,
+      "observed": 50096,
+      "x_aqua": 12.5
+    },
+    {
+      "year": 2005,
+      "subregion": "mainland",
+      "N_hat": 1119769.6,
+      "aqua_raw": 81366,
+      "observed": 81366,
+      "x_aqua": 13.8
+    },
+    {
+      "year": 2005,
+      "subregion": "maritime",
+      "N_hat": 394069.0,
+      "aqua_raw": 31665,
+      "observed": 31665,
+      "x_aqua": 12.4
+    },
+    {
+      "year": 2006,
+      "subregion": "mainland",
+      "N_hat": 951257.5,
+      "aqua_raw": 70210,
+      "observed": 70210,
+      "x_aqua": 13.6
+    },
+    {
+      "year": 2006,
+      "subregion": "maritime",
+      "N_hat": 752716.7,
+      "aqua_raw": 61201,
+      "observed": 61201,
+      "x_aqua": 12.3
+    },
+    {
+      "year": 2007,
+      "subregion": "mainland",
+      "N_hat": 1329203.3,
+      "aqua_raw": 98271,
+      "observed": 98271,
+      "x_aqua": 13.5
+    },
+    {
+      "year": 2007,
+      "subregion": "maritime",
+      "N_hat": 314857.8,
+      "aqua_raw": 24095,
+      "observed": 24095,
+      "x_aqua": 13.1
+    },
+    {
+      "year": 2008,
+      "subregion": "mainland",
+      "N_hat": 902337.9,
+      "aqua_raw": 66457,
+      "observed": 66457,
+      "x_aqua": 13.6
+    },
+    {
+      "year": 2008,
+      "subregion": "maritime",
+      "N_hat": 291616.3,
+      "aqua_raw": 22786,
+      "observed": 22786,
+      "x_aqua": 12.8
+    },
+    {
+      "year": 2009,
+      "subregion": "mainland",
+      "N_hat": 1135763.1,
+      "aqua_raw": 80390,
+      "observed": 80390,
+      "x_aqua": 14.1
+    },
+    {
+      "year": 2009,
+      "subregion": "maritime",
+      "N_hat": 561125.3,
+      "aqua_raw": 45475,
+      "observed": 45475,
+      "x_aqua": 12.3
+    },
+    {
+      "year": 2010,
+      "subregion": "mainland",
+      "N_hat": 1310800.3,
+      "aqua_raw": 97754,
+      "observed": 97754,
+      "x_aqua": 13.4
+    },
+    {
+      "year": 2010,
+      "subregion": "maritime",
+      "N_hat": 180517.7,
+      "aqua_raw": 13034,
+      "observed": 13034,
+      "x_aqua": 13.8
+    },
+    {
+      "year": 2011,
+      "subregion": "mainland",
+      "N_hat": 839249.1,
+      "aqua_raw": 60794,
+      "observed": 60794,
+      "x_aqua": 13.8
+    },
+    {
+      "year": 2011,
+      "subregion": "maritime",
+      "N_hat": 389556.3,
+      "aqua_raw": 30556,
+      "observed": 30556,
+      "x_aqua": 12.8
+    },
+    {
+      "year": 2012,
+      "subregion": "mainland",
+      "N_hat": 897496.6,
+      "aqua_raw": 80065,
+      "observed": 337206,
+      "x_aqua": 11.2
+    },
+    {
+      "year": 2012,
+      "subregion": "maritime",
+      "N_hat": 373822.9,
+      "aqua_raw": 33211,
+      "observed": 149402,
+      "x_aqua": 11.3
+    },
+    {
+      "year": 2013,
+      "subregion": "mainland",
+      "N_hat": 1029717.9,
+      "aqua_raw": 77169,
+      "observed": 401575,
+      "x_aqua": 13.3
+    },
+    {
+      "year": 2013,
+      "subregion": "maritime",
+      "N_hat": 281493.4,
+      "aqua_raw": 23481,
+      "observed": 111318,
+      "x_aqua": 12.0
+    },
+    {
+      "year": 2014,
+      "subregion": "mainland",
+      "N_hat": 1035149.1,
+      "aqua_raw": 77557,
+      "observed": 399440,
+      "x_aqua": 13.4
+    },
+    {
+      "year": 2014,
+      "subregion": "maritime",
+      "N_hat": 483303.4,
+      "aqua_raw": 40428,
+      "observed": 194477,
+      "x_aqua": 12.0
+    },
+    {
+      "year": 2015,
+      "subregion": "mainland",
+      "N_hat": 1056096.8,
+      "aqua_raw": 76309,
+      "observed": 405349,
+      "x_aqua": 13.8
+    },
+    {
+      "year": 2015,
+      "subregion": "maritime",
+      "N_hat": 608631.7,
+      "aqua_raw": 53081,
+      "observed": 245693,
+      "x_aqua": 11.5
+    },
+    {
+      "year": 2016,
+      "subregion": "mainland",
+      "N_hat": 1001165.8,
+      "aqua_raw": 68008,
+      "observed": 387630,
+      "x_aqua": 14.7
+    },
+    {
+      "year": 2016,
+      "subregion": "maritime",
+      "N_hat": 171630.1,
+      "aqua_raw": 12842,
+      "observed": 66240,
+      "x_aqua": 13.4
+    },
+    {
+      "year": 2017,
+      "subregion": "mainland",
+      "N_hat": 724503.0,
+      "aqua_raw": 52939,
+      "observed": 279282,
+      "x_aqua": 13.7
+    },
+    {
+      "year": 2017,
+      "subregion": "maritime",
+      "N_hat": 148474.3,
+      "aqua_raw": 9403,
+      "observed": 55325,
+      "x_aqua": 15.8
+    },
+    {
+      "year": 2018,
+      "subregion": "mainland",
+      "N_hat": 813348.8,
+      "aqua_raw": 54597,
+      "observed": 364227,
+      "x_aqua": 14.9
+    },
+    {
+      "year": 2018,
+      "subregion": "maritime",
+      "N_hat": 263030.2,
+      "aqua_raw": 16357,
+      "observed": 149875,
+      "x_aqua": 16.1
+    },
+    {
+      "year": 2019,
+      "subregion": "mainland",
+      "N_hat": 1127959.0,
+      "aqua_raw": 75286,
+      "observed": 652286,
+      "x_aqua": 15.0
+    },
+    {
+      "year": 2019,
+      "subregion": "maritime",
+      "N_hat": 370655.7,
+      "aqua_raw": 26681,
+      "observed": 219464,
+      "x_aqua": 13.9
+    },
+    {
+      "year": 2020,
+      "subregion": "mainland",
+      "N_hat": 1067377.6,
+      "aqua_raw": 71244,
+      "observed": 618370,
+      "x_aqua": 15.0
+    },
+    {
+      "year": 2020,
+      "subregion": "maritime",
+      "N_hat": 158586.5,
+      "aqua_raw": 7276,
+      "observed": 89197,
+      "x_aqua": 21.8
+    },
+    {
+      "year": 2021,
+      "subregion": "mainland",
+      "N_hat": 869461.4,
+      "aqua_raw": 62107,
+      "observed": 503886,
+      "x_aqua": 14.0
+    },
+    {
+      "year": 2021,
+      "subregion": "maritime",
+      "N_hat": 126010.9,
+      "aqua_raw": 6777,
+      "observed": 70228,
+      "x_aqua": 18.6
+    },
+    {
+      "year": 2022,
+      "subregion": "mainland",
+      "N_hat": 649813.5,
+      "aqua_raw": 35688,
+      "observed": 373508,
+      "x_aqua": 18.2
+    },
+    {
+      "year": 2022,
+      "subregion": "maritime",
+      "N_hat": 112115.5,
+      "aqua_raw": 5534,
+      "observed": 59328,
+      "x_aqua": 20.3
+    },
+    {
+      "year": 2023,
+      "subregion": "mainland",
+      "N_hat": 1072697.4,
+      "aqua_raw": 79720,
+      "observed": 622114,
+      "x_aqua": 13.5
+    },
+    {
+      "year": 2023,
+      "subregion": "maritime",
+      "N_hat": 321083.7,
+      "aqua_raw": 21772,
+      "observed": 185401,
+      "x_aqua": 14.8
+    },
+    {
+      "year": 2024,
+      "subregion": "mainland",
+      "N_hat": 906473.6,
+      "aqua_raw": 66220,
+      "observed": 528249,
+      "x_aqua": 13.7
+    },
+    {
+      "year": 2024,
+      "subregion": "maritime",
+      "N_hat": 184311.3,
+      "aqua_raw": 11820,
+      "observed": 102455,
+      "x_aqua": 15.6
+    },
+    {
+      "year": 2025,
+      "subregion": "mainland",
+      "N_hat": 669325.3,
+      "aqua_raw": 55859,
+      "observed": 391043,
+      "x_aqua": 12.0
+    },
+    {
+      "year": 2025,
+      "subregion": "maritime",
+      "N_hat": 151259.0,
+      "aqua_raw": 9143,
+      "observed": 87067,
+      "x_aqua": 16.5
+    }
+  ]
+}

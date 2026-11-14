@@ -1,0 +1,636 @@
+{
+ "source": "FireCensus Model 2 estimate, SEA PM window, Sept 2019, 0.5 deg cells with >=50 estimated fires",
+ "note": "tier A=top 20%, B=next 40%, C=rest. lat/lon are cell centres (deg). Map to sphere with the same lon/lat convention as the BMNG texture.",
+ "points": [
+  {
+   "lat": -2.5,
+   "lon": 115.0,
+   "fires_est": 1799,
+   "intensity": 1.0,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 113.0,
+   "fires_est": 1109,
+   "intensity": 0.936,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 112.5,
+   "fires_est": 1023,
+   "intensity": 0.925,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 115.0,
+   "fires_est": 983,
+   "intensity": 0.919,
+   "tier": "A"
+  },
+  {
+   "lat": -2.5,
+   "lon": 114.5,
+   "fires_est": 858,
+   "intensity": 0.901,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 114.0,
+   "fires_est": 842,
+   "intensity": 0.899,
+   "tier": "A"
+  },
+  {
+   "lat": -4.0,
+   "lon": 105.5,
+   "fires_est": 745,
+   "intensity": 0.882,
+   "tier": "A"
+  },
+  {
+   "lat": -2.0,
+   "lon": 110.0,
+   "fires_est": 724,
+   "intensity": 0.879,
+   "tier": "A"
+  },
+  {
+   "lat": -3.5,
+   "lon": 105.0,
+   "fires_est": 685,
+   "intensity": 0.871,
+   "tier": "A"
+  },
+  {
+   "lat": -2.0,
+   "lon": 110.5,
+   "fires_est": 654,
+   "intensity": 0.865,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 111.0,
+   "fires_est": 650,
+   "intensity": 0.864,
+   "tier": "A"
+  },
+  {
+   "lat": -3.0,
+   "lon": 114.5,
+   "fires_est": 646,
+   "intensity": 0.863,
+   "tier": "A"
+  },
+  {
+   "lat": -1.5,
+   "lon": 110.5,
+   "fires_est": 645,
+   "intensity": 0.863,
+   "tier": "A"
+  },
+  {
+   "lat": -3.5,
+   "lon": 115.0,
+   "fires_est": 632,
+   "intensity": 0.861,
+   "tier": "A"
+  },
+  {
+   "lat": -1.0,
+   "lon": 109.5,
+   "fires_est": 619,
+   "intensity": 0.858,
+   "tier": "A"
+  },
+  {
+   "lat": -2.5,
+   "lon": 110.5,
+   "fires_est": 614,
+   "intensity": 0.857,
+   "tier": "A"
+  },
+  {
+   "lat": -1.5,
+   "lon": 104.0,
+   "fires_est": 610,
+   "intensity": 0.856,
+   "tier": "A"
+  },
+  {
+   "lat": -0.5,
+   "lon": 110.5,
+   "fires_est": 606,
+   "intensity": 0.855,
+   "tier": "A"
+  },
+  {
+   "lat": -3.5,
+   "lon": 105.5,
+   "fires_est": 605,
+   "intensity": 0.855,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 113.0,
+   "fires_est": 599,
+   "intensity": 0.853,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 111.0,
+   "fires_est": 572,
+   "intensity": 0.847,
+   "tier": "B"
+  },
+  {
+   "lat": -2.0,
+   "lon": 116.0,
+   "fires_est": 557,
+   "intensity": 0.844,
+   "tier": "B"
+  },
+  {
+   "lat": -1.0,
+   "lon": 110.5,
+   "fires_est": 548,
+   "intensity": 0.842,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 103.5,
+   "fires_est": 547,
+   "intensity": 0.841,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 115.5,
+   "fires_est": 522,
+   "intensity": 0.835,
+   "tier": "B"
+  },
+  {
+   "lat": 0.0,
+   "lon": 116.5,
+   "fires_est": 521,
+   "intensity": 0.835,
+   "tier": "B"
+  },
+  {
+   "lat": -3.0,
+   "lon": 110.5,
+   "fires_est": 508,
+   "intensity": 0.831,
+   "tier": "B"
+  },
+  {
+   "lat": -2.0,
+   "lon": 114.0,
+   "fires_est": 503,
+   "intensity": 0.83,
+   "tier": "B"
+  },
+  {
+   "lat": -3.0,
+   "lon": 105.0,
+   "fires_est": 502,
+   "intensity": 0.83,
+   "tier": "B"
+  },
+  {
+   "lat": -3.5,
+   "lon": 114.5,
+   "fires_est": 500,
+   "intensity": 0.829,
+   "tier": "B"
+  },
+  {
+   "lat": -0.5,
+   "lon": 112.5,
+   "fires_est": 481,
+   "intensity": 0.824,
+   "tier": "B"
+  },
+  {
+   "lat": -1.5,
+   "lon": 110.0,
+   "fires_est": 479,
+   "intensity": 0.824,
+   "tier": "B"
+  },
+  {
+   "lat": -1.0,
+   "lon": 114.0,
+   "fires_est": 476,
+   "intensity": 0.823,
+   "tier": "B"
+  },
+  {
+   "lat": -4.5,
+   "lon": 105.5,
+   "fires_est": 473,
+   "intensity": 0.822,
+   "tier": "B"
+  },
+  {
+   "lat": -2.0,
+   "lon": 113.5,
+   "fires_est": 451,
+   "intensity": 0.815,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 104.5,
+   "fires_est": 446,
+   "intensity": 0.814,
+   "tier": "B"
+  },
+  {
+   "lat": -1.0,
+   "lon": 112.5,
+   "fires_est": 433,
+   "intensity": 0.81,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 103.0,
+   "fires_est": 430,
+   "intensity": 0.809,
+   "tier": "B"
+  },
+  {
+   "lat": -1.0,
+   "lon": 110.0,
+   "fires_est": 426,
+   "intensity": 0.808,
+   "tier": "B"
+  },
+  {
+   "lat": -2.0,
+   "lon": 116.5,
+   "fires_est": 426,
+   "intensity": 0.808,
+   "tier": "B"
+  },
+  {
+   "lat": -5.5,
+   "lon": 119.5,
+   "fires_est": 424,
+   "intensity": 0.807,
+   "tier": "B"
+  },
+  {
+   "lat": -2.5,
+   "lon": 106.0,
+   "fires_est": 417,
+   "intensity": 0.805,
+   "tier": "B"
+  },
+  {
+   "lat": -0.5,
+   "lon": 111.0,
+   "fires_est": 413,
+   "intensity": 0.804,
+   "tier": "B"
+  },
+  {
+   "lat": -4.5,
+   "lon": 105.0,
+   "fires_est": 411,
+   "intensity": 0.803,
+   "tier": "B"
+  },
+  {
+   "lat": -3.0,
+   "lon": 113.5,
+   "fires_est": 408,
+   "intensity": 0.802,
+   "tier": "B"
+  },
+  {
+   "lat": -3.0,
+   "lon": 103.5,
+   "fires_est": 403,
+   "intensity": 0.8,
+   "tier": "B"
+  },
+  {
+   "lat": 0.0,
+   "lon": 111.0,
+   "fires_est": 396,
+   "intensity": 0.798,
+   "tier": "B"
+  },
+  {
+   "lat": 0.5,
+   "lon": 116.5,
+   "fires_est": 396,
+   "intensity": 0.798,
+   "tier": "B"
+  },
+  {
+   "lat": 0.0,
+   "lon": 110.5,
+   "fires_est": 388,
+   "intensity": 0.795,
+   "tier": "B"
+  },
+  {
+   "lat": -0.5,
+   "lon": 103.0,
+   "fires_est": 379,
+   "intensity": 0.792,
+   "tier": "B"
+  },
+  {
+   "lat": 2.5,
+   "lon": 118.0,
+   "fires_est": 379,
+   "intensity": 0.792,
+   "tier": "B"
+  },
+  {
+   "lat": -1.0,
+   "lon": 103.0,
+   "fires_est": 375,
+   "intensity": 0.791,
+   "tier": "B"
+  },
+  {
+   "lat": -0.5,
+   "lon": 114.5,
+   "fires_est": 374,
+   "intensity": 0.791,
+   "tier": "B"
+  },
+  {
+   "lat": 1.5,
+   "lon": 118.0,
+   "fires_est": 369,
+   "intensity": 0.789,
+   "tier": "B"
+  },
+  {
+   "lat": 0.0,
+   "lon": 112.0,
+   "fires_est": 363,
+   "intensity": 0.786,
+   "tier": "C"
+  },
+  {
+   "lat": -0.5,
+   "lon": 116.0,
+   "fires_est": 360,
+   "intensity": 0.785,
+   "tier": "C"
+  },
+  {
+   "lat": 2.0,
+   "lon": 117.5,
+   "fires_est": 359,
+   "intensity": 0.785,
+   "tier": "C"
+  },
+  {
+   "lat": -2.5,
+   "lon": 105.0,
+   "fires_est": 358,
+   "intensity": 0.785,
+   "tier": "C"
+  },
+  {
+   "lat": -1.0,
+   "lon": 102.0,
+   "fires_est": 356,
+   "intensity": 0.784,
+   "tier": "C"
+  },
+  {
+   "lat": -2.0,
+   "lon": 106.0,
+   "fires_est": 351,
+   "intensity": 0.782,
+   "tier": "C"
+  },
+  {
+   "lat": -2.0,
+   "lon": 114.5,
+   "fires_est": 349,
+   "intensity": 0.781,
+   "tier": "C"
+  },
+  {
+   "lat": -3.5,
+   "lon": 104.5,
+   "fires_est": 346,
+   "intensity": 0.78,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 115.5,
+   "fires_est": 343,
+   "intensity": 0.779,
+   "tier": "C"
+  },
+  {
+   "lat": -4.0,
+   "lon": 114.5,
+   "fires_est": 337,
+   "intensity": 0.776,
+   "tier": "C"
+  },
+  {
+   "lat": -0.5,
+   "lon": 116.5,
+   "fires_est": 333,
+   "intensity": 0.775,
+   "tier": "C"
+  },
+  {
+   "lat": -2.0,
+   "lon": 115.0,
+   "fires_est": 329,
+   "intensity": 0.773,
+   "tier": "C"
+  },
+  {
+   "lat": -1.0,
+   "lon": 113.5,
+   "fires_est": 325,
+   "intensity": 0.772,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 104.5,
+   "fires_est": 324,
+   "intensity": 0.771,
+   "tier": "C"
+  },
+  {
+   "lat": -2.0,
+   "lon": 104.0,
+   "fires_est": 322,
+   "intensity": 0.771,
+   "tier": "C"
+  },
+  {
+   "lat": -2.5,
+   "lon": 116.5,
+   "fires_est": 322,
+   "intensity": 0.77,
+   "tier": "C"
+  },
+  {
+   "lat": -2.0,
+   "lon": 103.0,
+   "fires_est": 321,
+   "intensity": 0.77,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 112.0,
+   "fires_est": 318,
+   "intensity": 0.769,
+   "tier": "C"
+  },
+  {
+   "lat": 2.0,
+   "lon": 117.0,
+   "fires_est": 317,
+   "intensity": 0.768,
+   "tier": "C"
+  },
+  {
+   "lat": -1.0,
+   "lon": 113.0,
+   "fires_est": 317,
+   "intensity": 0.768,
+   "tier": "C"
+  },
+  {
+   "lat": -2.5,
+   "lon": 114.0,
+   "fires_est": 315,
+   "intensity": 0.768,
+   "tier": "C"
+  },
+  {
+   "lat": -1.5,
+   "lon": 116.5,
+   "fires_est": 315,
+   "intensity": 0.767,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 104.0,
+   "fires_est": 312,
+   "intensity": 0.766,
+   "tier": "C"
+  },
+  {
+   "lat": 0.0,
+   "lon": 115.5,
+   "fires_est": 307,
+   "intensity": 0.764,
+   "tier": "C"
+  },
+  {
+   "lat": 0.5,
+   "lon": 111.0,
+   "fires_est": 294,
+   "intensity": 0.758,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 108.0,
+   "fires_est": 293,
+   "intensity": 0.758,
+   "tier": "C"
+  },
+  {
+   "lat": 2.0,
+   "lon": 100.5,
+   "fires_est": 291,
+   "intensity": 0.757,
+   "tier": "C"
+  },
+  {
+   "lat": -3.5,
+   "lon": 112.5,
+   "fires_est": 288,
+   "intensity": 0.755,
+   "tier": "C"
+  },
+  {
+   "lat": 0.5,
+   "lon": 116.0,
+   "fires_est": 287,
+   "intensity": 0.755,
+   "tier": "C"
+  },
+  {
+   "lat": -4.5,
+   "lon": 104.5,
+   "fires_est": 282,
+   "intensity": 0.753,
+   "tier": "C"
+  },
+  {
+   "lat": -4.5,
+   "lon": 104.0,
+   "fires_est": 278,
+   "intensity": 0.751,
+   "tier": "C"
+  },
+  {
+   "lat": 3.5,
+   "lon": 116.5,
+   "fires_est": 277,
+   "intensity": 0.75,
+   "tier": "C"
+  },
+  {
+   "lat": -3.0,
+   "lon": 106.5,
+   "fires_est": 277,
+   "intensity": 0.75,
+   "tier": "C"
+  },
+  {
+   "lat": -2.5,
+   "lon": 112.0,
+   "fires_est": 274,
+   "intensity": 0.749,
+   "tier": "C"
+  },
+  {
+   "lat": -1.0,
+   "lon": 111.0,
+   "fires_est": 272,
+   "intensity": 0.748,
+   "tier": "C"
+  },
+  {
+   "lat": -3.5,
+   "lon": 103.0,
+   "fires_est": 270,
+   "intensity": 0.747,
+   "tier": "C"
+  }
+ ]
+}
