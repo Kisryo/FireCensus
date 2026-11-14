@@ -18,6 +18,10 @@ node_modules/
 out/
 .vercel/
 
+# --- IDE ---
+.vscode/
+.idea/
+
 # --- secrets & local ---
 .env
 .env.*
