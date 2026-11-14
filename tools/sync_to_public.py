@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PUBLIC = os.path.join(os.path.dirname(HERE), "FireCensus")
 
 INCLUDE_DIRS = ["pipeline", "backend", "web", "assets", "data/product", "docs"]
-INCLUDE_FILES = ["requirements.txt", "FireCensusScene.jsx"]
+INCLUDE_FILES = ["README.md", "requirements.txt", "FireCensusScene.jsx"]
 EXCLUDE = ["docs/screens/web", "docs/prompt-", "docs/WORKFLOW.md", "__pycache__", ".pyc",
            "node_modules", ".next", ".env", "fires_weighted_", "start_backend.bat.bak"]
 
@@ -47,7 +47,7 @@ def main():
     print("skipped (private only):")
     for r in sorted(set(os.path.dirname(s) or s for s in stats["skipped"])):
         print("  -", r)
-    print(f"\nPublic folder: {PUBLIC}\nREADME.md and .gitignore there are kept as they are (public versions).")
+    print(f"\nPublic folder: {PUBLIC}\n.gitignore there is kept as it is (public version).")
 
 
 if __name__ == "__main__":
