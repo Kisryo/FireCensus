@@ -151,16 +151,18 @@ def cells(year: int, month: int, bbox: Optional[str] = None, country: Optional[s
     rf, rp = region_filter(country, bbox, True)
     k = round(res / 0.1)
     df = q(f"""
-      WITH cur AS (SELECT ci, cj, n_hat, n_obs, burning_days FROM cells_month
+      WITH cur AS (SELECT ci, cj, n_hat, n_obs, burning_days, aqua_raw, snpp_raw, noaa20_raw FROM cells_month
                    WHERE year=? AND month=? AND {rf}),
            clim AS (SELECT ci, cj, n_median FROM cells_clim WHERE month=? AND {rf}),
            j AS (SELECT coalesce(cur.ci, clim.ci) ci, coalesce(cur.cj, clim.cj) cj,
                         coalesce(n_hat,0) n_hat, coalesce(n_obs,0) n_obs, coalesce(burning_days,0) burning_days,
-                        coalesce(n_median,0) n_median
+                        coalesce(n_median,0) n_median, coalesce(aqua_raw,0) aqua_raw, coalesce(snpp_raw,0) snpp_raw,
+                        coalesce(noaa20_raw,0) noaa20_raw
                  FROM cur FULL JOIN clim USING (ci, cj))
       SELECT (floor(ci/{k})*{k} + {k}/2.0)/10 AS lat, (floor(cj/{k})*{k} + {k}/2.0)/10 AS lon,
              round(sum(n_hat),1) n_hat, sum(n_obs) n_obs, max(burning_days) burning_days_max,
-             round(sum(n_median),1) n_median
+             round(sum(n_median),1) n_median,
+             sum(aqua_raw) aqua_raw, sum(snpp_raw) snpp_raw, sum(noaa20_raw) noaa20_raw
       FROM j GROUP BY 1, 2 HAVING sum(n_hat) > 0 OR sum(n_median) > 0""", [year, month] + rp + [month] + rp)
     df["anomaly"] = (df.n_hat - df.n_median).round(1)
     df["ratio"] = ((df.n_hat + 1) / (df.n_median + 1)).round(2)
@@ -169,6 +171,63 @@ def cells(year: int, month: int, bbox: Optional[str] = None, country: Optional[s
     return {"year": year, "month": month, "res": res, "spatial_confidence": "low" if year < 2012 else "normal",
             "note": note, "n_cells": len(df),
             "total_n_hat": round(float(df.n_hat.sum())), "cells": records(df)}
+
+
+@app.get("/cells/years")
+def cells_years(bbox: Optional[str] = None, country: Optional[str] = None,
+                res: float = Query(0.5, description="display grid: 0.25 or 0.5 deg")):
+    """Timelapse layer: yearly totals per cell, 2002-2026, as FireCensus N and as the raw 'newest satellite'
+    count (Aqua until 2011, S-NPP from 2012). Compact arrays: values[i][j] = year i, cell j."""
+    if res not in (0.25, 0.5):
+        raise HTTPException(400, "res must be 0.25 or 0.5")
+    rf, rp = region_filter(country, bbox, True)
+    k = round(res / 0.1)
+    df = q(f"""
+      SELECT year, (floor(ci/{k})*{k} + {k}/2.0)/10 AS lat, (floor(cj/{k})*{k} + {k}/2.0)/10 AS lon,
+             sum(n_hat) n_hat, sum(coalesce(aqua_raw,0)) aqua,
+             sum(CASE WHEN year < 2012 THEN coalesce(aqua_raw,0) ELSE coalesce(snpp_raw,0) END) naive
+      FROM cells_month WHERE {rf} GROUP BY 1, 2, 3""", rp)
+    years = list(range(2002, 2027))
+    cells = df[["lat", "lon"]].drop_duplicates().sort_values(["lat", "lon"]).reset_index(drop=True)
+    idx = {(a, b): i for i, (a, b) in enumerate(zip(cells.lat, cells.lon))}
+    out = {f: [[0] * len(cells) for _ in years] for f in ("n_hat", "naive", "aqua")}
+    for r in df.itertuples(index=False):
+        yi, ci = r.year - 2002, idx[(r.lat, r.lon)]
+        out["n_hat"][yi][ci] = round(r.n_hat)
+        out["naive"][yi][ci] = round(r.naive)
+        out["aqua"][yi][ci] = round(r.aqua)
+    return {"res": res, "years": years, "cells": [[float(a), float(b)] for a, b in zip(cells.lat, cells.lon)], **out,
+            "note": "2026 covers January to mid-November. S-NPP stopped on 2 Nov 2026."}
+
+
+WEIGHTS = ROOT / "data" / "interim" / "weights"
+FIRE_FILES = [p.as_posix() for p in [PRODUCT / "fires_weighted_SEA_PM.parquet", WEIGHTS / "w_SEA_2026_PM.parquet"] if p.exists()]
+
+
+@app.get("/fires")
+def fires(year: int, month: int, bbox: str, limit: int = Query(6000, le=20000)):
+    """Individual detected fires (one row per fire) in a small map window, with which satellites saw each one
+    and its weight: how many fires it stands for once the fires no satellite saw are added back."""
+    try:
+        x0, y0, x1, y1 = [float(v) for v in bbox.split(",")]
+    except Exception:
+        raise HTTPException(400, "bbox must be minLon,minLat,maxLon,maxLat")
+    if (x1 - x0) * (y1 - y0) > 60:
+        raise HTTPException(400, "window too large: zoom in (max 60 square degrees)")
+    if not FIRE_FILES:
+        raise HTTPException(503, "per-fire file not found on this server")
+    files = "', '".join(FIRE_FILES)
+    df = q(f"""
+      SELECT round(lat, 4) lat, round(lon, 4) lon, round(frp, 1) frp,
+             coalesce(cap_Aqua, -1) a, coalesce(cap_SNPP, -1) s, coalesce(cap_NOAA20, -1) n,
+             round(w_final, 2) w, round(w_full, 2) wf
+      FROM read_parquet(['{files}'], union_by_name=true)
+      WHERE year=? AND month=? AND lon BETWEEN ? AND ? AND lat BETWEEN ? AND ? AND w_final > 0
+      ORDER BY w_final DESC LIMIT ?""", [year, month, x0, x1, y0, y1, limit])
+    return {"year": year, "month": month, "n": len(df), "era": "back-cast from Aqua" if year < 2012 else "overlap",
+            "fires": df.values.tolist(), "columns": list(df.columns),
+            "legend": "a/s/n = seen by Aqua / S-NPP / NOAA-20 (1 yes, 0 no, -1 not flying); "
+                      "w = fires this detection stands for; wf = 1 / chance that at least one satellite sees a fire like it"}
 
 
 @app.get("/timeseries")
