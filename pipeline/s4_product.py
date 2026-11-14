@@ -11,7 +11,9 @@ Writes data/product/
 import duckdb
 from config import PRODUCT_DIR, DUCKDB_MEMORY, DUCKDB_THREADS
 
-SRC = (PRODUCT_DIR / "fires_weighted_SEA_PM.parquet").as_posix()
+_W2026 = PRODUCT_DIR.parent / "interim" / "weights" / "w_SEA_2026_PM.parquet"
+SRC_FILES = [(PRODUCT_DIR / "fires_weighted_SEA_PM.parquet").as_posix()] + ([_W2026.as_posix()] if _W2026.exists() else [])
+SRC = "', '".join(SRC_FILES)  # used inside read_parquet(['...'])
 CLIM_Y0, CLIM_Y1 = 2003, 2025
 NY = CLIM_Y1 - CLIM_Y0 + 1  # 23
 
@@ -30,7 +32,7 @@ def main():
              sum(w_final) AS n_hat,
              count(DISTINCT lst_date) AS burning_days,
              sum(frp) AS frp_sum
-      FROM read_parquet('{SRC}')
+      FROM read_parquet(['{SRC}'], union_by_name=true)
       GROUP BY ci, cj, lat_c, lon_c, year, month
     ) TO '{out("cells_month.parquet")}' (FORMAT parquet, COMPRESSION zstd)""")
 
@@ -57,7 +59,7 @@ def main():
              sum(CASE WHEN cap_Aqua=1 THEN 1 ELSE 0 END) AS aqua_raw,
              sum(CASE WHEN cap_SNPP=1 THEN 1 ELSE 0 END) AS snpp_raw,
              sum(CASE WHEN cap_NOAA20=1 THEN 1 ELSE 0 END) AS noaa20_raw
-      FROM read_parquet('{SRC}')
+      FROM read_parquet(['{SRC}'], union_by_name=true)
       GROUP BY country, year, month
     ) TO '{out("country_month.parquet")}' (FORMAT parquet)""")
 

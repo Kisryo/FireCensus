@@ -177,3 +177,66 @@ Script `pipeline/s4_product.py` (14 s). Outputs in `data/product/`:
 - Single 0.1° cells are not reliable in that era.
 
 **Action taken.** `/cells` now returns `spatial_confidence: "low"` plus a note for years before 2012. The web app should default to 0.5° for those years and show the caveat.
+
+## 2026 + NOAA-21 data (2026-11-14, event day 1)
+FIRMS custom Archive Download requests are in `~/Downloads/FIRMS 2026`. Folder names don't include the country, so each request is classified by its bounding box. The result is written to `data/raw_manifest/firms_custom.csv`. The three Australia requests were submitted by accident and are excluded.
+
+New script: `pipeline/s0b_ingest_custom.py`. Its outputs:
+- `NOAA21_2023..2025`: 0.94 M, 0.89 M and 0.71 M rows, all archive (SP).
+- `MODIS_2026`, `SNPP_2026`, `NOAA20_2026`, `NOAA21_2026`: SP through Jul–Aug, then NRT through 2026-11-13.
+
+**Facts from the FIRMS page**
+- S-NPP stops on 2026-11-02. The latest S-NPP detection in our data is 2026-11-02.
+- NOAA-21 data start 2023-03-01.
+
+**NRT rows have no `type` column**, so `fire_type` is NULL and `source='NRT'`. In 2026 SP data, 96–99% of detections are vegetation (type 0). Plan: drop NRT detections that fall on static land or offshore sources, using a mask built from SP rows with type 2 or 3.
+
+**Early signal: 2026 is the most extreme Indonesian fire season of the VIIRS era.** Raw NOAA-20 detections for Indonesia, against the 2019–2025 median and max:
+| Month | 2026 | Median | Previous max |
+|---|---|---|---|
+| Aug | 146 k | 17 k | 59 k |
+| Sep | 210 k | 19 k | 194 k (2019) |
+| Oct | 224 k | 14 k | 81 k (2019) |
+
+**Next steps**
+1. Add NOAA-21 as a 4th capture occasion. Fit its detection curve on 2023–2025.
+2. Run 2026 through s1–s4. After Nov 2, S-NPP is automatically NaN in the coverage check, so no model change is needed.
+
+## NOAA-21 as 4th sensor + 2026 product (2026-11-14)
+**Matching.** `s1_match.py` takes `FIRECENSUS_P4=1` (adds NOAA-21) and `FIRECENSUS_WINDOWS=PM`. NRT rows with no type are kept, except in ~1 km cells that SP data flag as volcano, static land or offshore (types 1–3, 2023–26). Outputs are `fires_SEA_{2023..2026}_eps1.5_m*_p4.parquet`.
+
+**4-sensor Huggins model** (`s3b_noaa21.py`, SEA PM 2023–25, 20% sample, n = 468 k, converged). FRP at 50% detection, 0.2 km² pixel:
+- S-NPP 14.8 MW
+- NOAA-20 15.1 MW
+- NOAA-21 13.1 MW
+
+So the three VIIRS units behave alike, and NOAA-21 is slightly more sensitive. For Aqua, 50% detection is reached at 24.6 MW on a 1 km² pixel.
+
+**Drop-one test** (same 4-sensor model; remove one sensor's occasion, compared with N from all four):
+| Year | Historic set (no NOAA-21) | Post-Nov-2026 set (no S-NPP) |
+|---|---|---|
+| 2023 | 0.998 | 0.937 |
+| 2024 | 0.975 | 0.972 |
+| 2025 | 0.946 | 1.006 |
+
+Observed counts move 15–25% when a sensor is dropped, but N moves only 0–6%. This is the evidence that the sensor of origin does not matter.
+
+**Caveat on calibration periods.** The 4-sensor model fit on 2023–25 gives N about 21% higher than the historic 3-sensor model fit on 2012–21, for the same years. That is a difference between calibration periods: different curves, Aqua orbit drift after 2022, and the closure/time-gap effect. It is not caused by adding a sensor.
+
+→ **Decision:** 2026 is computed with the historic model (`s3c_2026.py`), so it is comparable with 2002–2025. The 4-sensor numbers are kept as a sensitivity check. Capture-recapture N should be read as conservative under unmodeled heterogeneity.
+
+**2026 S-NPP end is handled automatically.** After 2026-11-02, 100% of fires have S-NPP = NaN (6,419 fires), so they are estimated from Aqua and NOAA-20.
+
+**2026 Indonesia, harmonized N** from `/compare`, against the 2003–25 climatology:
+| Month | N | Median | Ratio | Percentile |
+|---|---|---|---|---|
+| Aug | 106 k | 53 k | 2.0× | 87th |
+| Sep | 114 k | 78 k | 1.47× | 78th |
+| Oct | 106 k | 46 k | 2.3× | 83rd |
+
+- Against the 2012–25 median only, Aug is 2.6×, the highest August in the VIIRS era, just above 2015 (105 k).
+- Sep and Oct stay below 2015 (166 k and 162 k).
+
+**Correction.** The earlier "9–16× median" came from raw NOAA-20 all-day pixel counts against a 2019–25 baseline that has no 2015. Pixel counts inflate big-fire years, which is exactly the bias FireCensus removes. Use the harmonized numbers in the demo.
+
+**Product rebuilt with 2026.** `cells_month` has 1.70 M rows. Backend default end is 2026-11, and `/meta` carries the 2026 note.

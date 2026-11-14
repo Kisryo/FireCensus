@@ -37,21 +37,36 @@ OVERPASS_GAP_MIN = 10
 COVER_KM = 300
 IMPUTE_KM = 50
 WINDOWS = {"PM": (12.5, 15.5), "NIGHT": (0.5, 3.5)}
-CAPTURE_PLATFORMS = ["Aqua", "SNPP", "NOAA20"]  # afternoon/night lists
-VIIRS = {"SNPP", "NOAA20"}
+import os
+# FIRECENSUS_P4=1 adds NOAA-21 (data from 2023-03) as a 4th capture occasion.
+P4 = os.environ.get("FIRECENSUS_P4") == "1"
+CAPTURE_PLATFORMS = ["Aqua", "SNPP", "NOAA20"] + (["NOAA21"] if P4 else [])
+VIIRS = {"SNPP", "NOAA20", "NOAA21"}
+# FIRECENSUS_WINDOWS=PM restricts matching to the afternoon window (faster)
+_W = os.environ.get("FIRECENSUS_WINDOWS")
+if _W:
+    WINDOWS = {k: v for k, v in WINDOWS.items() if k in _W.split(",")}
 
 FIRES_DIR = INTERIM_DIR / "fires"
 
 
 def load(region: str, year: int, months=None) -> pd.DataFrame:
+    """Vegetation-fire detections. NRT rows have no `type`: they are kept unless they fall in a
+    ~1 km cell where science-quality data flagged a volcano / static land / offshore source."""
     con = duckdb.connect()
     month_sql = f"AND month IN ({','.join(map(str, months))})" if months else ""
+    plats = ",".join(f"'{p}'" for p in CAPTURE_PLATFORMS)
+    det = f"read_parquet('{DETECTIONS_DIR.as_posix()}/*_{year}.parquet', union_by_name=true)"
+    static = f"read_parquet('{DETECTIONS_DIR.as_posix()}/*_202[3-6].parquet', union_by_name=true)"
     df = con.execute(f"""
+        WITH mask AS (SELECT DISTINCT round(lat, 2) mlat, round(lon, 2) mlon FROM {static}
+                      WHERE region = '{region}' AND fire_type IN (1, 2, 3))
         SELECT platform, lat, lon, t_utc, lst_hours, lst_date, daynight,
                area_km2, frp_mw, conf_class, country
-        FROM read_parquet('{DETECTIONS_DIR.as_posix()}/*_{year}.parquet')
-        WHERE fire_type = 0 AND region = '{region}'
-          AND platform IN ('Aqua', 'SNPP', 'NOAA20') {month_sql}
+        FROM {det} d
+        WHERE region = '{region}' AND platform IN ({plats}) {month_sql}
+          AND (fire_type = 0 OR (fire_type IS NULL AND NOT EXISTS (
+                SELECT 1 FROM mask WHERE mlat = round(d.lat, 2) AND mlon = round(d.lon, 2))))
     """).fetchdf()
     return df
 
@@ -132,6 +147,7 @@ def main(region: str, year: int, eps_km: float = 1.5, months=None) -> None:
     fires["year"] = year
     FIRES_DIR.mkdir(parents=True, exist_ok=True)
     suffix = f"_m{months[0]}-{months[-1]}" if months else ""
+    suffix += "_p4" if P4 else ""
     path = FIRES_DIR / f"fires_{region}_{year}_eps{eps_km}{suffix}.parquet"
     fires.to_parquet(path, index=False)
     print(f"{region} {year} eps={eps_km}: {len(df):,} detections -> {len(fires):,} fires "

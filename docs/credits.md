@@ -44,3 +44,13 @@ Materials were changed to PBR: gold thermal foil (metalness 0.9, roughness 0.35)
 Fire detections: NASA FIRMS (MODIS Collection 6.1 and VIIRS 375 m). Cite with the official FIRMS DOIs.
 
 The 90 glowing fire points on the Spline globe come from `assets/data/fires_sept2019_points.json` (September 2019, Sumatra and Borneo, grid-cell centres). They are placed with the same longitude/latitude mapping as the Blue Marble texture (u = (lon + 180) / 360). The glow sprites are drawn in Spline; they are not NASA imagery.
+
+## Fire data acknowledgement (required by FIRMS)
+We acknowledge the use of data and imagery from LANCE FIRMS operated by NASA's Earth Science Data and Information System (ESDIS), with funding provided by NASA Headquarters.
+Source page: https://www.earthdata.nasa.gov/data/tools/firms
+
+Citations:
+- Giglio, L., Schroeder, W., Justice, C. O. (2016). The collection 6 MODIS active fire detection algorithm and fire products. Remote Sensing of Environment. https://doi.org/10.1016/j.rse.2016.02.054
+- Schroeder, W., Oliva, P., Giglio, L., Csiszar, I. A. (2014). The New VIIRS 375 m active fire detection data product. Remote Sensing of Environment. https://doi.org/10.1016/j.rse.2013.12.008
+- Davies, D. K., Ilavajhala, S., Wong, M. M., Justice, C. O. (2009). Fire Information for Resource Management System: archiving and distributing MODIS active fire data. IEEE TGRS. https://doi.org/10.1109/TGRS.2008.2002076
+- Justice, C. O., et al. (2002). The MODIS fire products. Remote Sensing of Environment. https://doi.org/10.1016/S0034-4257(02)00076-7

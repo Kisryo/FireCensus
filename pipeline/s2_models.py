@@ -27,7 +27,8 @@ from scipy.special import expit
 
 from config import INTERIM_DIR
 
-PLATFORMS = ["Aqua", "SNPP", "NOAA20"]
+import os
+PLATFORMS = ["Aqua", "SNPP", "NOAA20"] + (["NOAA21"] if os.environ.get("FIRECENSUS_P4") == "1" else [])
 FIRES_DIR = INTERIM_DIR / "fires"
 MODELS_DIR = INTERIM_DIR / "models"
 

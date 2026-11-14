@@ -72,7 +72,7 @@ def region_filter(country: Optional[str], bbox: Optional[str], cell_level: bool)
 
 def date_filter(start: Optional[str], end: Optional[str]):
     y0, m0 = ym(start) if start else (2002, 1)
-    y1, m1 = ym(end) if end else (2025, 12)
+    y1, m1 = ym(end) if end else (2026, 11)
     return "(year*100+month) BETWEEN ? AND ?", [y0 * 100 + m0, y1 * 100 + m1]
 
 
@@ -101,7 +101,7 @@ def monthly_series(country, bbox, start, end):
         s = q(f"""SELECT year, month, sum(n_hat) n_hat, sum(n_obs) n_obs
                   FROM cells_month WHERE {rf} AND {df_sql} GROUP BY year, month""", rp + df_p)
     y0, m0 = ym(start) if start else (2002, 1)
-    y1, m1 = ym(end) if end else (2025, 12)
+    y1, m1 = ym(end) if end else (2026, 11)
     grid = [(y, m) for y in range(y0, y1 + 1) for m in range(1, 13) if y0 * 100 + m0 <= y * 100 + m <= y1 * 100 + m1]
     import pandas as pd
     g = pd.DataFrame(grid, columns=["year", "month"])
@@ -127,7 +127,7 @@ def health():
 def meta():
     return {
         "countries": COUNTRIES,
-        "years": [2002, 2025],
+        "years": [2002, 2026],
         "grid_deg": 0.1,
         "climatology_years": list(CLIM_YEARS),
         "window": "PM overpass (12:30-15:30 local solar time): Aqua MODIS, S-NPP VIIRS, NOAA-20 VIIRS",
@@ -135,6 +135,7 @@ def meta():
             "N is a VIIRS-equivalent fire count including fires no satellite saw (capture-recapture estimate).",
             "2002 is partial: Aqua data start July 2002.",
             "2002-2011 values are back-cast from Aqua alone (Model 3); 2012+ use all three sensors.",
+            "2026: Aug-Nov from near-real-time data (no fire-type field; static sources masked). S-NPP ended 2026-11-02; afterwards Aqua + NOAA-20 only (drop-one tests: N changes 0-6%).",
         ],
         "source": "NASA FIRMS standard processing (MODIS C6.1, VIIRS 375 m); FireCensus harmonization.",
     }
