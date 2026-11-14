@@ -98,7 +98,8 @@ def monthly_series(country, bbox, start, end):
                   FROM country_month WHERE {rf} AND {df_sql} GROUP BY year, month""", rp + df_p)
     else:
         rf, rp = region_filter(None, bbox, True)
-        s = q(f"""SELECT year, month, sum(n_hat) n_hat, sum(n_obs) n_obs
+        s = q(f"""SELECT year, month, sum(n_hat) n_hat, sum(n_obs) n_obs,
+                         sum(aqua_raw) aqua_raw, sum(snpp_raw) snpp_raw, sum(noaa20_raw) noaa20_raw
                   FROM cells_month WHERE {rf} AND {df_sql} GROUP BY year, month""", rp + df_p)
     y0, m0 = ym(start) if start else (2002, 1)
     y1, m1 = ym(end) if end else (2026, 11)
@@ -243,14 +244,16 @@ def export_cells(start: str, end: str, country: Optional[str] = None, bbox: Opti
 
 
 @app.get("/method/detection-curves")
-def detection_curves(area_km2: float = 1.0):
-    """Probability each sensor detects a fire vs. its FRP (Huggins model, pooled 2012-2021)."""
+def detection_curves():
+    """Probability each sensor detects a fire vs. its FRP (Huggins model, pooled 2012-2021),
+    each at its own nadir pixel size: MODIS 1 km x 1 km, VIIRS 375 m x 375 m."""
     frp = np.round(np.logspace(np.log10(0.5), np.log10(500), 60), 3)
+    nadir = {"Aqua": 1.0, "SNPP": 0.1406, "NOAA20": 0.1406}
     out = {}
     for sat, c in FIT["coefs"].items():
-        eta = c["intercept"] + c["log_frp"] * np.log(frp) + c["log_area"] * math.log(area_km2)
+        eta = c["intercept"] + c["log_frp"] * np.log(frp) + c["log_area"] * math.log(nadir.get(sat, 1.0))
         out[sat] = np.round(1 / (1 + np.exp(-eta)), 4).tolist()
-    return {"frp_mw": frp.tolist(), "pixel_area_km2": area_km2, "p_detect": out,
+    return {"frp_mw": frp.tolist(), "pixel_area_km2": nadir, "p_detect": out,
             "frp_map": FIT["frp_map"], "validation_E2": BACKCAST.get("validation_E2")}
 
 

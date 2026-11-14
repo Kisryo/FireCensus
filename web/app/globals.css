@@ -1,0 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #0B0F1A; color: #E6EDF3; }
+* { -webkit-font-smoothing: antialiased; }
+.num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.card { @apply rounded-xl border border-line bg-panel/80 backdrop-blur; }
+.btn { @apply rounded-lg border border-line px-3 py-1.5 text-sm transition hover:border-sat/60 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sat; }
+.btn-on { @apply border-sat bg-sat/15 text-white; }
+.label { @apply text-[11px] font-semibold uppercase tracking-wider text-slate-400; }
+input, select { @apply rounded-md border border-line bg-space px-2 py-1 text-sm text-slate-100 focus:border-sat focus:outline-none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.maplibregl-ctrl-attrib { font-size: 10px; }

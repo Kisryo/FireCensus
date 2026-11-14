@@ -31,7 +31,10 @@ def main():
              count(*) AS n_obs,
              sum(w_final) AS n_hat,
              count(DISTINCT lst_date) AS burning_days,
-             sum(frp) AS frp_sum
+             sum(frp) AS frp_sum,
+             sum(CASE WHEN cap_Aqua=1 THEN 1 ELSE 0 END) AS aqua_raw,
+             sum(CASE WHEN cap_SNPP=1 THEN 1 ELSE 0 END) AS snpp_raw,
+             sum(CASE WHEN cap_NOAA20=1 THEN 1 ELSE 0 END) AS noaa20_raw
       FROM read_parquet(['{SRC}'], union_by_name=true)
       GROUP BY ci, cj, lat_c, lon_c, year, month
     ) TO '{out("cells_month.parquet")}' (FORMAT parquet, COMPRESSION zstd)""")

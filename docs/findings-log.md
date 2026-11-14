@@ -240,3 +240,25 @@ Observed counts move 15–25% when a sensor is dropped, but N moves only 0–6%.
 **Correction.** The earlier "9–16× median" came from raw NOAA-20 all-day pixel counts against a 2019–25 baseline that has no 2015. Pixel counts inflate big-fire years, which is exactly the bias FireCensus removes. Use the harmonized numbers in the demo.
 
 **Product rebuilt with 2026.** `cells_month` has 1.70 M rows. Backend default end is 2026-11, and `/meta` carries the 2026 note.
+
+## Website v0.1 (2026-11-14)
+`web/` is Next.js 15 with Tailwind, react-three-fiber, MapLibre and Spline. It was built and tested in a headless browser: every page renders with no errors.
+
+**Pages**
+- `/` is the scroll story over the Spline globe, with 5 steps: Welcome, Welcome, Story_Scan, Story_Zoom, Story_Handoff. If Spline fails to load, the page falls back to a static background.
+- `/explore` has:
+  - area selection: 5 cases, a country picker, or a typed or drawn bounding box
+  - dates
+  - 4 sources: FireCensus, raw MODIS, raw S-NPP, and raw "best sensor", which shows the fake 2012 jump
+  - three views: a 3D skyline with Iso/Front/Side/Top presets (keys 1–4), a 2D calendar, and a map
+  - options for recovered-fire overlay, anomaly colours (RdBu), log scale, and the same scale for every source
+  - bottom cards: this month vs median, peak months and years, unusual months (above the 90th percentile), critical period
+  - CSV downloads
+- `/cases` has 5 cases.
+- `/method` covers capture histories, detection curves (each sensor at its nadir pixel), validation, limitations and citations.
+
+**Backend changes**
+- `cells_month` gains `aqua_raw`, `snpp_raw` and `noaa20_raw`, so a bbox series can show raw sources.
+- `/method/detection-curves` now uses the nadir pixel areas: MODIS 1 km², VIIRS 0.14 km². At 50% detection, Aqua needs about 19 MW and VIIRS about 5 MW.
+
+**Fix:** the case texts were rewritten from the API's own `/compare` outputs for each case region. The Indonesia cases now use the country, not a bbox.
