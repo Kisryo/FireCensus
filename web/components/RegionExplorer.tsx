@@ -32,6 +32,7 @@ const STYLE: any = {
     countries: { type: "geojson", data: "/sea-countries.geojson" },
     cells: { type: "geojson", data: EMPTY },
     fires: { type: "geojson", data: EMPTY },
+    ghosts: { type: "geojson", data: EMPTY },
     area: { type: "geojson", data: EMPTY },
   },
   layers: [
@@ -44,12 +45,14 @@ const STYLE: any = {
     { id: "cells-3d", type: "fill-extrusion", source: "cells", layout: { visibility: "none" },
       paint: { "fill-extrusion-color": ["get", "c"], "fill-extrusion-height": ["get", "h"], "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.9 } },
     // ④ every fire: a soft halo sized by how many fires it stands for, and a bright core for the detection itself
-    { id: "fire-halo", type: "circle", source: "fires", minzoom: DOTS_ZOOM,
-      paint: { "circle-color": "#FF6B35", "circle-opacity": 0.28, "circle-blur": 0.6,
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6.5, ["*", 2.2, ["sqrt", ["get", "w"]]], 10, ["*", 6, ["sqrt", ["get", "w"]]]] } },
+    // fires no satellite saw (FireCensus lens only): hollow violet rings placed around the detection they were inferred from
+    { id: "ghost-ring", type: "circle", source: "ghosts", minzoom: DOTS_ZOOM,
+      paint: { "circle-color": "rgba(167,139,250,0.22)", "circle-stroke-color": "#A78BFA", "circle-stroke-width": 1.4, "circle-stroke-opacity": 0.95,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6.5, 2.2, 10, 5.5] } },
+    // detected fires: colour depends on the satellite lens (seen by it / missed by it)
     { id: "fire-core", type: "circle", source: "fires", minzoom: DOTS_ZOOM,
-      paint: { "circle-color": "#FFE3C2", "circle-stroke-color": "#FF6B35", "circle-stroke-width": 0.8,
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6.5, 1.6, 10, 4] } },
+      paint: { "circle-color": ["get", "c"], "circle-opacity": ["get", "o"], "circle-stroke-color": ["get", "sc"], "circle-stroke-width": 0.8,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 6.5, ["*", 1.6, ["get", "r"]], 10, ["*", 4, ["get", "r"]]] } },
   ],
 };
 
@@ -103,6 +106,9 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
   const [cmp, setCmp] = useState<Compare | null>(null);
   const [hoverCell, setHoverCell] = useState<{ v: number; fc: number; med: number } | null>(null);
   const [hoverFire, setHoverFire] = useState<Fire | null>(null);
+  const [hoverGhost, setHoverGhost] = useState<Fire | null>(null);
+  const firesRef = useRef<Fire[]>([]);
+  const [firesVer, setFiresVer] = useState(0);
   const [fires, setFires] = useState<{ n: number; truncated: boolean } | null>(null);
   const [dock, setDock] = useState<null | "calendar" | "skyline">(null);
   const [series, setSeries] = useState<SeriesRow[]>([]);
@@ -143,6 +149,8 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     ["cells-2d", "cells-3d"].forEach((l) => { m.on("mousemove", l, cellHover); m.on("mouseleave", l, cellLeave); });
     m.on("mousemove", "fire-core", (ev: any) => { const p = ev.features?.[0]?.properties; if (p) setHoverFire(p as Fire); });
     m.on("mouseleave", "fire-core", () => setHoverFire(null));
+    m.on("mousemove", "ghost-ring", (ev: any) => { const p = ev.features?.[0]?.properties; if (p) setHoverGhost(p as Fire); });
+    m.on("mouseleave", "ghost-ring", () => setHoverGhost(null));
     map.current = m;
     return () => m.remove();
   }, [bounds]);
@@ -180,7 +188,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
   const loadFires = useCallback(() => {
     const m = map.current;
     if (!m) return;
-    if (mode !== "month" || m.getZoom() < DOTS_ZOOM) { (m.getSource("fires") as any)?.setData(EMPTY); setFires(null); return; }
+    if (mode !== "month" || m.getZoom() < DOTS_ZOOM) { firesRef.current = []; setFiresVer((v) => v + 1); setFires(null); return; }
     const b = m.getBounds();
     const cx = (b.getWest() + b.getEast()) / 2, cy = (b.getSouth() + b.getNorth()) / 2;
     const hw = Math.min((b.getEast() - b.getWest()) / 2, 4), hh = Math.min((b.getNorth() - b.getSouth()) / 2, 3.5);
@@ -189,11 +197,8 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
       .then((r) => r.json()).then((d) => {
         if (!d.columns) { setFires(null); return; }
         const ci = Object.fromEntries((d.columns as string[]).map((c, i) => [c, i]));
-        const features = (d.fires as number[][]).map((f) => ({
-          type: "Feature", geometry: { type: "Point", coordinates: [f[ci.lon], f[ci.lat]] },
-          properties: { lat: f[ci.lat], lon: f[ci.lon], frp: f[ci.frp], a: f[ci.a], s: f[ci.s], n: f[ci.n], w: f[ci.w], wf: f[ci.wf] },
-        }));
-        (m.getSource("fires") as any)?.setData({ type: "FeatureCollection", features });
+        firesRef.current = (d.fires as number[][]).map((f) => ({ lat: f[ci.lat], lon: f[ci.lon], frp: f[ci.frp], a: f[ci.a], s: f[ci.s], n: f[ci.n], w: f[ci.w], wf: f[ci.wf] }));
+        setFiresVer((v) => v + 1);
         setFires({ n: d.n, truncated: d.n >= 6000 });
       }).catch(() => setFires(null));
   }, [mode, picked]);
@@ -206,6 +211,42 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     loadFires();
     return () => { m.off("moveend", onMove); clearTimeout(t); };
   }, [ready, loadFires]);
+
+  // draw individual fires for the current lens
+  const fireStats = useMemo(() => {
+    const list = mode === "month" ? firesRef.current : [];
+    const key = lens === "aqua" ? "a" : lens === "snpp" ? "s" : lens === "noaa20" ? "n" : null;
+    const feats: any[] = [], ghosts: any[] = [];
+    let seen = 0, missed = 0, est = 0;
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    for (const f of list) {
+      const hit = key ? (f as any)[key] === 1 : true;
+      if (hit) seen++; else missed++;
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [f.lon, f.lat] },
+        properties: { ...f, hit: hit ? 1 : 0,
+          c: !key ? "#FFE3C2" : hit ? "#4FC3F7" : "#475569", sc: !key ? "#FF6B35" : hit ? "#E0F2FE" : "#334155",
+          o: hit ? 1 : 0.55, r: hit ? 1 : 0.7 } });
+      if (lens === "fc") {
+        // the extra (w - 1) fires this detection stands for, scattered within ~2 km of it (exact spots are unknown)
+        const extra = f.w - 1;
+        const k = Math.floor(extra) + (rnd() < extra - Math.floor(extra) ? 1 : 0);
+        for (let i = 0; i < k && ghosts.length < 25000; i++) {
+          const ang = rnd() * 2 * Math.PI, rad = 0.006 + rnd() * 0.014;
+          ghosts.push({ type: "Feature", geometry: { type: "Point", coordinates: [f.lon + rad * Math.cos(ang), f.lat + rad * Math.sin(ang)] }, properties: { ...f } });
+        }
+        est += k;
+      }
+    }
+    return { seen, missed, est, key, feats, ghosts };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firesVer, lens, mode]);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    (m.getSource("fires") as any)?.setData({ type: "FeatureCollection", features: fireStats.feats });
+    (m.getSource("ghosts") as any)?.setData({ type: "FeatureCollection", features: fireStats.ghosts });
+  }, [fireStats, ready]);
 
   // draw month cells (fixed colour scale = FireCensus max, so a single satellite looks as sparse as it really is)
   useEffect(() => {
@@ -387,7 +428,10 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
       {/* hover readouts */}
       {hoverFire && mode === "month" && (
         <div className="card pointer-events-none absolute right-16 top-4 w-72 p-3 text-sm">
-          <div className="mb-1 font-semibold">One detected fire · {hoverFire.frp} MW</div>
+          <div className="mb-1 font-semibold">
+            {fireStats.key && !(hoverFire as any)[fireStats.key] ? <span className="text-slate-400">Missed by {lensLabel} · </span> : fireStats.key ? <span className="text-sat">Seen by {lensLabel} · </span> : null}
+            One detected fire · {hoverFire.frp} MW
+          </div>
           <div className="flex gap-2 text-xs">
             {([["Aqua", hoverFire.a], ["S-NPP", hoverFire.s], ["NOAA-20", hoverFire.n]] as const).map(([k, v]) => (
               <span key={k} className={`rounded px-1.5 py-0.5 ${v === 1 ? "bg-fire/25 text-fire" : v === 0 ? "bg-white/10 text-slate-400 line-through" : "bg-white/5 text-slate-600"}`}>{k} {v === 1 ? "✓" : v === 0 ? "missed" : "–"}</span>
@@ -400,7 +444,18 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
           </p>
         </div>
       )}
-      {hoverCell && !hoverFire && (
+      {hoverGhost && !hoverFire && mode === "month" && (
+        <div className="card pointer-events-none absolute right-16 top-4 w-72 p-3 text-sm">
+          <div className="mb-1 font-semibold text-[#A78BFA]">○ A fire no satellite saw (estimated)</div>
+          <p className="text-[13px] leading-snug text-slate-300">
+            {picked.y < 2012
+              ? <>Before 2012 only Aqua flew. A detection nearby stands for <b className="text-white">{hoverGhost.w}</b> VIIRS-equivalent fires, so FireCensus adds the missing ones here.</>
+              : <>A {hoverGhost.frp} MW fire nearby had only a <b className="text-white">{Math.round(100 / Math.max(hoverGhost.wf, 1))}%</b> chance of being caught. For every fire like it that a satellite saw, about <b className="text-white">{Math.max(0, hoverGhost.w - 1).toFixed(1)}</b> similar fires burned unseen.</>}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">Drawn within ~2 km of that detection; the exact spot is unknown. The count is what FireCensus estimates.</p>
+        </div>
+      )}
+      {hoverCell && !hoverFire && !hoverGhost && (
         <div className="card pointer-events-none absolute right-16 top-4 p-3 text-sm">
           <div className="num text-lg font-semibold">{fmt(hoverCell.v)} {mode === "month" && lens !== "fc" ? "detections" : "fires"}</div>
           <div className="text-xs text-slate-400">
@@ -411,7 +466,13 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
       )}
       {mode === "month" && (
         <div className="pointer-events-none absolute bottom-[132px] left-4 rounded-full border border-line bg-space/80 px-3 py-1 text-xs text-slate-300 backdrop-blur">
-          {zoom < DOTS_ZOOM ? "🔍 Zoom in to see every single fire" : fires ? `${fmt(fires.n)} individual fires${fires.truncated ? " (largest shown)" : ""} · hover one` : "Loading fires…"}
+          {zoom < DOTS_ZOOM ? "🔍 Zoom in to see every single fire" : !fires ? "Loading fires…" : lens === "fc" ? (
+            <><span className="text-[#FFE3C2]">●</span> {fmt(fireStats.seen)} seen by a satellite · <span className="text-[#A78BFA]">○</span> {fmt(fireStats.est)} no satellite saw{fires.truncated ? " (largest shown)" : ""} · hover one</>
+          ) : fireStats.key ? (
+            <><span className="text-sat">●</span> {fmt(fireStats.seen)} seen by {lensLabel} · <span className="text-slate-500">●</span> {fmt(fireStats.missed)} missed by {lensLabel} (another satellite saw them)</>
+          ) : (
+            <><span className="text-[#FFE3C2]">●</span> {fmt(fireStats.seen)} fires seen by at least one satellite · switch to FireCensus to add the unseen ones</>
+          )}
           <span className="ml-2 text-slate-500">· cells {res}°</span>
         </div>
       )}
