@@ -2,16 +2,16 @@
 // One continuous story on one globe (page-flow.md section 2, extended):
 //   chapters 1-5 explain the problem and the method (Spline Welcome / Story_* states),
 //   chapters 6-8 walk through a real example with live data (Story_Example_* states, Spline v5),
-//   chapter 9 hands the globe to the visitor: click a pin, read the three answers.
+//   chapter 9 hands the globe to the visitor: click a pin, the globe zooms in, then open a
+//   3D skyline, map or calendar as a large overlay over the globe (components/RegionViews.tsx).
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, type CalendarMonth, type Compare, type SeriesRow } from "@/lib/api";
 import { CASES, REGIONS, pinForArea } from "@/lib/regions";
 import { MONTHS, fmt } from "@/lib/colors";
 import { HistoryBars, SeasonChart, TrendChart } from "@/components/Charts";
-import GuidedExplore from "@/components/GuidedExplore";
+import RegionViews, { RegionOptions, type View } from "@/components/RegionViews";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const SplineScene = dynamic(() => import("@/components/SplineScene"), { ssr: false });
@@ -109,7 +109,7 @@ function RegionPicker({ pick, pickCase }: { pick: (id: string) => void; pickCase
   return (
     <>
       <h2 className="mt-2 text-2xl font-semibold leading-snug">Now pick any region.</h2>
-      <p className="mt-2 text-[15px] text-slate-300"><b>Click a glowing pin on the globe</b>, or choose below. You&apos;ll get the same three answers for any area and any month since 2002.</p>
+      <p className="mt-2 text-[15px] text-slate-300"><b>Click a glowing pin on the globe</b>, or choose below. The globe flies there, then you choose how to look at its fires: a 3D skyline, a map or a calendar, for every month since 2002.</p>
       <div className="mt-4 grid grid-cols-2 gap-1.5">
         {REGIONS.map((r) => (
           <button key={r.id} className="btn text-left" onClick={() => pick(r.id)}>
@@ -126,9 +126,6 @@ function RegionPicker({ pick, pickCase }: { pick: (id: string) => void; pickCase
           </button>
         ))}
       </div>
-      <p className="mt-4 text-xs text-slate-500">
-        Want the full toolkit? <Link href="/explore/advanced" className="text-sat underline">3D skyline, map & CSV</Link> · <Link href="/explore?flat=1" className="text-sat underline">2D version</Link>
-      </p>
     </>
   );
 }
@@ -146,6 +143,7 @@ function StoryInner() {
   const initCountry = params.get("country");
   const [area, setArea] = useState<string | null>(initCase ? `case:${initCase.id}` : initCountry ? `country:${initCountry}` : null);
   const [ym, setYm] = useState(initCase ? { y: initCase.year, m: initCase.month } : LATEST);
+  const [openView, setOpenView] = useState<View | null>(null);
 
   useEffect(() => {
     api.health().catch(() => {}); // wake the backend early
@@ -170,11 +168,11 @@ function StoryInner() {
 
   const pick = useCallback((id: string) => {
     const r = REGIONS.find((x) => x.id === id);
-    if (r) { setArea(r.areaKey); setYm(LATEST); }
+    if (r) { setArea(r.areaKey); setYm(LATEST); setOpenView(null); }
   }, []);
   const pickCase = (id: string) => {
     const c = CASES.find((x) => x.id === id)!;
-    setArea(`case:${c.id}`); setYm({ y: c.year, m: c.month });
+    setArea(`case:${c.id}`); setYm({ y: c.year, m: c.month }); setOpenView(null);
   };
   const onStateChange = useCallback((v: string) => {
     if (!v?.startsWith("Explore_") || v === "Explore_Overview") return;
@@ -225,25 +223,27 @@ function StoryInner() {
         {CHAPTERS.map((c, i) => (
           <section key={i} id={i === EXPLORE ? "explore" : undefined} ref={(el) => { refs.current[i] = el; }} data-i={i}
             className={`flex ${c.explore ? "min-h-screen items-start pt-16" : "min-h-screen items-center"} px-6 md:pl-14`}>
-            <div className={`pointer-events-auto w-full ${c.chart || c.explore ? "max-w-[560px]" : "max-w-md"} transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-35"}`}>
+            {!(c.explore && area) && <div className={`pointer-events-auto w-full ${c.chart || c.explore ? "max-w-[560px]" : "max-w-md"} transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-35"}`}>
               <div className="card p-6">
                 <div className={`label ${i >= 5 ? "text-sat" : "text-fire"}`}>{c.kicker}</div>
                 {c.title && <h2 className="mt-2 text-2xl font-semibold leading-snug">{c.title}</h2>}
                 {c.body && <p className="mt-3 text-[15px] leading-relaxed text-slate-300">{c.body}</p>}
                 {c.chart && <ExampleCard chart={c.chart} d={d} />}
-                {c.explore && !area && <RegionPicker pick={pick} pickCase={pickCase} />}
-                {c.explore && area && (
-                  <div className="-mx-5 -mb-6">
-                    <div className="px-5"><button className="btn mt-3 text-sm" onClick={() => setArea(null)}>← All regions</button></div>
-                    <GuidedExplore compact area={area} onArea={setArea} initYear={ym.y} initMonth={ym.m} onAreaPicked={(_, y, m) => setYm({ y, m })} />
-                  </div>
-                )}
+                {c.explore && <RegionPicker pick={pick} pickCase={pickCase} />}
               </div>
-            </div>
+            </div>}
           </section>
         ))}
         <div className="h-[20vh]" />
       </div>
+
+      {/* chapter 9, region picked: three view options float over the zoomed-in globe */}
+      {step === EXPLORE && area && !openView && (
+        <RegionOptions area={area} onOpen={setOpenView} onBack={() => setArea(null)} />
+      )}
+      {area && openView && (
+        <RegionViews area={area} view={openView} onView={setOpenView} onClose={() => setOpenView(null)} initYm={ym} />
+      )}
     </main>
   );
 }

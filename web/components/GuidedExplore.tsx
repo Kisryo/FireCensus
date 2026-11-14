@@ -1,7 +1,7 @@
 "use client";
 // Guided Explore panel: pick an area and a month, then read three plain answers.
 // Used full-page (fallback) and as the left panel over the Spline globe.
-// The full 3D skyline / map / source controls live at /explore/advanced.
+// The 3D skyline / map / calendar views live in chapter 9 of the story page (components/RegionViews.tsx).
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -125,7 +125,7 @@ export default function GuidedExplore({ area, onArea, initYear, initMonth, compa
     return { years, fc: idx(fc), naive: idx(naive), modis: idx(modis), jumpNaive, chgFc, busiest };
   }, [series]);
 
-  const advancedHref = kind === "country" ? `/explore/advanced?country=${id}` : kind === "case" ? `/explore/advanced?case=${id}` : `/explore/advanced`;
+  const advancedHref = kind === "country" ? `/?country=${id}#explore` : kind === "case" ? `/?case=${id}#explore` : `/#explore`;
   const statusColor = cmp?.status === "above normal" ? "bg-fire/20 text-fire" : cmp?.status === "below normal" ? "bg-sat/20 text-sat" : "bg-white/10 text-slate-200";
 
   return (
@@ -157,7 +157,7 @@ export default function GuidedExplore({ area, onArea, initYear, initMonth, compa
         </label>
         <div className="ml-auto flex flex-wrap gap-2">
           <a className="btn" href={api.csvTimeseries(region, "2002-07", `${LAST.y}-${LAST.m}`)}>⬇ Monthly data (CSV)</a>
-          <Link className="btn" href={advancedHref}>3D skyline & map →</Link>
+          <Link className="btn" href={advancedHref}>3D globe, skyline & map →</Link>
         </div>
         {theCase && <p className="w-full text-sm text-slate-400">{theCase.story[0]}</p>}
       </div>

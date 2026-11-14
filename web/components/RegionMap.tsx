@@ -29,9 +29,12 @@ function boxFeature(b?: string) {
   } as any;
 }
 
-export default function RegionMap({ cells, res, anomaly, bbox, onBbox }: {
-  cells: Cell[]; res: number; anomaly: boolean; bbox?: string; onBbox: (b: string) => void;
+export default function RegionMap({ cells, res, anomaly, bbox, onBbox, noDraw, fitKey }: {
+  cells: Cell[]; res: number; anomaly: boolean; bbox?: string; onBbox?: (b: string) => void;
+  noDraw?: boolean; // hide the "Draw area" button
+  fitKey?: string; // when set, zoom to the area once per key (bbox if given, else the extent of the cells)
 }) {
+  const fitted = useRef<string | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [drawing, setDrawing] = useState(false);
@@ -71,7 +74,7 @@ export default function RegionMap({ cells, res, anomaly, bbox, onBbox }: {
       drawRef.current = false;
       setDrawing(false);
       if (Math.abs(a.lng - b.lng) < 0.2 || Math.abs(a.lat - b.lat) < 0.2) return;
-      onBbox([Math.min(a.lng, b.lng), Math.min(a.lat, b.lat), Math.max(a.lng, b.lng), Math.max(a.lat, b.lat)].map((v) => v.toFixed(2)).join(","));
+      onBbox?.([Math.min(a.lng, b.lng), Math.min(a.lat, b.lat), Math.max(a.lng, b.lng), Math.max(a.lat, b.lat)].map((v) => v.toFixed(2)).join(","));
     });
     map.current = m;
     return () => m.remove();
@@ -96,6 +99,19 @@ export default function RegionMap({ cells, res, anomaly, bbox, onBbox }: {
   }, [bbox, loaded]);
 
   useEffect(() => {
+    if (!loaded || !map.current || !fitKey || fitted.current === fitKey) return;
+    let b: [number, number, number, number] | null = null;
+    if (bbox) { const v = bbox.split(",").map(Number); b = [v[0], v[1], v[2], v[3]]; }
+    else if (cells.length) {
+      const lons = cells.map((c) => c.lon), lats = cells.map((c) => c.lat);
+      b = [Math.min(...lons) - res, Math.min(...lats) - res, Math.max(...lons) + res, Math.max(...lats) + res];
+    }
+    if (!b) return;
+    fitted.current = fitKey;
+    map.current.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 900, maxZoom: 7 });
+  }, [fitKey, cells, bbox, res, loaded]);
+
+  useEffect(() => {
     drawRef.current = drawing;
     if (map.current) map.current.getCanvas().style.cursor = drawing ? "crosshair" : "";
   }, [drawing]);
@@ -103,9 +119,9 @@ export default function RegionMap({ cells, res, anomaly, bbox, onBbox }: {
   return (
     <div className="relative h-full w-full">
       <div ref={el} className="h-full w-full" />
-      <button className={`btn absolute left-3 top-3 bg-space/80 ${drawing ? "btn-on" : ""}`} onClick={() => setDrawing((d) => !d)}>
+      {!noDraw && <button className={`btn absolute left-3 top-3 bg-space/80 ${drawing ? "btn-on" : ""}`} onClick={() => setDrawing((d) => !d)}>
         {drawing ? "Drag on the map…" : "✎ Draw area"}
-      </button>
+      </button>}
     </div>
   );
 }

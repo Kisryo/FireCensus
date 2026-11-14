@@ -119,3 +119,18 @@ export function pinForArea(key: string): string {
   if (c.country) return REGIONS.find((r) => r.region.country === c.country)?.id ?? "indonesia";
   return c.id === "mainland-2020" ? "mainland" : "borneo_sumatra";
 }
+
+/** API region and display name for a panel area key (case:/country:/region:). */
+export function regionForArea(key: string): { country?: string; bbox?: string } {
+  const [kind, id] = key.split(":");
+  if (kind === "country") return { country: id };
+  if (kind === "region") return REGIONS.find((r) => r.id === id)?.region ?? { country: "Indonesia" };
+  const c = CASES.find((x) => x.id === id);
+  return c ? (c.country ? { country: c.country } : { bbox: c.bbox }) : { country: "Indonesia" };
+}
+export function labelForArea(key: string): string {
+  const [kind, id] = key.split(":");
+  if (kind === "country") return REGIONS.find((r) => r.region.country === id)?.name ?? countryName(id);
+  if (kind === "region") return REGIONS.find((r) => r.id === id)?.name ?? id;
+  return CASES.find((x) => x.id === id)?.title ?? id;
+}
