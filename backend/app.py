@@ -20,7 +20,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 
-ROOT = Path(os.environ.get("FIRECENSUS_ROOT", Path(__file__).resolve().parents[1]))
+BUNDLED_ROOT = Path(__file__).resolve().parent / ".vercel-data"
+ROOT = Path(os.environ.get("FIRECENSUS_ROOT", BUNDLED_ROOT if BUNDLED_ROOT.exists() else Path(__file__).resolve().parents[1]))
 PRODUCT = ROOT / "data" / "product"
 MODELS = ROOT / "data" / "interim" / "models"
 CLIM_YEARS = (2003, 2025)

@@ -26,3 +26,8 @@ out/
 .DS_Store
 Thumbs.db
 
+
+# Generated backend deployment data
+backend/.vercel-data/
+backend/build/
+backend/*.egg-info/
