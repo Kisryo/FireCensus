@@ -90,9 +90,26 @@ const flying = (l: Lens, y: number, m: number) => {
   return true;
 };
 
+function peakMonthOf(series: SeriesRow[]) {
+  if (!series.length) return 9;
+  const med = Array.from({ length: 12 }, (_, k) => median(series.filter((r) => r.month === k + 1 && r.year >= 2003 && r.year <= 2025).map((r) => r.n_hat)));
+  return med.indexOf(Math.max(...med)) + 1;
+}
+
 export default function RegionExplorer({ area, initYm, onBack }: { area: string; initYm: { y: number; m: number }; onBack: () => void }) {
-  const region = useMemo(() => regionForArea(area), [area]);
-  const bounds = useMemo(() => boundsForArea(area), [area]);
+  const [custom, setCustom] = useState<string | null>(null); // a box the visitor drew
+  const region = useMemo(() => (custom ? { bbox: custom } : regionForArea(area)), [area, custom]);
+  const areaBounds = useMemo(() => boundsForArea(area), [area]);
+  const bounds = useMemo(() => (custom ? (custom.split(",").map(Number) as [number, number, number, number]) : areaBounds), [custom, areaBounds]);
+  const [drawing, setDrawing] = useState(false);
+  const drawRef = useRef(false);
+  const drawStart = useRef<maplibregl.LngLat | null>(null);
+  const [tour, setTour] = useState<number | null>(null); // story tour step
+  const [cap, setCap] = useState<any>(null);
+  const [curves, setCurves] = useState<any>(null);
+  const [dataOpen, setDataOpen] = useState(false);
+  const [from, setFrom] = useState("2002-07");
+  const [to, setTo] = useState("2026-11");
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -127,12 +144,11 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
   // ---------- map: start on the whole globe, then fly down onto the region ----------
   useEffect(() => {
     if (!el.current) return;
-    const [w, s, e, n] = bounds;
+    const [w, s, e, n] = areaBounds;
     const m = new maplibregl.Map({
       container: el.current, style: STYLE, center: [(w + e) / 2, (s + n) / 2], zoom: 1.6,
       attributionControl: { compact: true }, maxPitch: 70,
     });
-    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.on("load", () => {
       (m.getSource("area") as any)?.setData({ type: "FeatureCollection", features: [{ type: "Feature", properties: {},
         geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } }] });
@@ -151,9 +167,39 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     m.on("mouseleave", "fire-core", () => setHoverFire(null));
     m.on("mousemove", "ghost-ring", (ev: any) => { const p = ev.features?.[0]?.properties; if (p) setHoverGhost(p as Fire); });
     m.on("mouseleave", "ghost-ring", () => setHoverGhost(null));
+    // ✎ Draw area: drag a box
+    const boxGeo = (a: maplibregl.LngLat, b: maplibregl.LngLat) => ({ type: "FeatureCollection", features: [{ type: "Feature", properties: {},
+      geometry: { type: "Polygon", coordinates: [[[a.lng, a.lat], [b.lng, a.lat], [b.lng, b.lat], [a.lng, b.lat], [a.lng, a.lat]]] } }] });
+    m.on("mousedown", (ev) => { if (!drawRef.current) return; ev.preventDefault(); drawStart.current = ev.lngLat; m.dragPan.disable(); });
+    m.on("mousemove", (ev) => { if (drawRef.current && drawStart.current) (m.getSource("area") as any)?.setData(boxGeo(drawStart.current, ev.lngLat)); });
+    m.on("mouseup", (ev) => {
+      if (!drawRef.current || !drawStart.current) return;
+      const a = drawStart.current, b = ev.lngLat;
+      drawStart.current = null; drawRef.current = false; setDrawing(false); m.dragPan.enable(); m.getCanvas().style.cursor = "";
+      if (Math.abs(a.lng - b.lng) < 0.3 || Math.abs(a.lat - b.lat) < 0.3) return;
+      setCustom([Math.min(a.lng, b.lng), Math.min(a.lat, b.lat), Math.max(a.lng, b.lng), Math.max(a.lat, b.lat)].map((v) => v.toFixed(2)).join(","));
+    });
     map.current = m;
     return () => m.remove();
-  }, [bounds]);
+  }, [areaBounds]);
+
+  useEffect(() => {
+    drawRef.current = drawing;
+    if (map.current) map.current.getCanvas().style.cursor = drawing ? "crosshair" : "";
+  }, [drawing]);
+
+  // a new box (or reset): outline it, fly to it, forget data for the old area
+  const firstBounds = useRef(true);
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m) return;
+    const [w, s, e, n] = bounds;
+    (m.getSource("area") as any)?.setData({ type: "FeatureCollection", features: [{ type: "Feature", properties: {},
+      geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } }] });
+    if (firstBounds.current) { firstBounds.current = false; return; }
+    setYd(null); setCap(null); setSeries([]);
+    m.fitBounds([[w, s], [e, n]], { padding: { top: 190, bottom: 130, left: 60, right: 60 }, duration: 1400, maxZoom: 9 });
+  }, [bounds, ready]);
 
   // flat cells vs 3D towers (tilt the camera for towers). Skip the first run so the fly-in isn't cancelled.
   const firstDisplay = useRef(true);
@@ -279,7 +325,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     const vals = yd[ylens][yi], fc = yd.n_hat[yi], h = yd.res / 2;
     const features = yd.cells.map(([lat, lon], j) => vals[j] > 0 ? {
       type: "Feature",
-      properties: { v: vals[j], fc: fc[j], med: 0, c: viridis(Math.log1p(vals[j]) / Math.log1p(yMax)), h: Math.sqrt(vals[j] / yMax) * 420000 },
+      properties: { v: vals[j], fc: fc[j], med: 0, c: viridis(Math.sqrt(vals[j] / yMax)), h: Math.sqrt(vals[j] / yMax) * 420000 },
       geometry: { type: "Polygon", coordinates: square(lon, lat, h) },
     } : null).filter(Boolean);
     (m.getSource("cells") as any)?.setData({ type: "FeatureCollection", features });
@@ -303,14 +349,52 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     return () => clearTimeout(t);
   }, [playing, yi, yd]);
 
+  // ---------- story tour ----------
+  const tourYm = useMemo(() => ({ y: 2026, m: Math.min(peakMonthOf(series), 10) }), [series]);
+  useEffect(() => {
+    if (tour === null) return;
+    if (!curves) api.curves().then(setCurves).catch(() => {});
+    if (!cap) fetch(`${API}/capture?year=${tourYm.y}&month=${tourYm.m}&${region.country ? `country=${encodeURIComponent(region.country)}` : `bbox=${region.bbox}`}`)
+      .then((r) => r.json()).then(setCap).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour, cap, region, tourYm]);
+  const flewHot = useRef(false);
+  useEffect(() => {
+    const m = map.current;
+    if (tour === null || !m || !ready) return;
+    setDock(null);
+    const fit = () => { const [w, s, e, n] = bounds; m.fitBounds([[w, s], [e, n]], { padding: { top: 340, bottom: 120, left: 60, right: 60 }, duration: 1500, maxZoom: 7 }); };
+    if (tour <= 3) { setMode("month"); setPlaying(false); setPicked(tourYm); setDisplay("flat"); }
+    if (tour === 0) { setLens("seen"); fit(); }
+    if (tour === 1) { setLens("aqua"); fit(); }
+    if (tour === 2) { setLens("aqua"); flewHot.current = false; }
+    if (tour === 3) setLens("fc");
+    if (tour === 4) { setMode("years"); setYlens("aqua"); setPlaying(false); setYi(4); }
+    if (tour === 5) { setMode("years"); setYlens("naive"); setPlaying(false); setYi(9); const t = setTimeout(() => setYi(10), 1800); return () => clearTimeout(t); }
+    if (tour === 6) { setMode("years"); setYlens("n_hat"); setYi(0); setPlaying(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour, ready]);
+  // step 3: zoom into the hottest cell of the region so single fires show
+  useEffect(() => {
+    const m = map.current;
+    if (tour !== 2 || !m || flewHot.current || !cells.length || picked.m !== tourYm.m || picked.y !== tourYm.y) return;
+    const [w, s, e, n] = bounds;
+    const inside = cells.filter((c) => c.lon >= w && c.lon <= e && c.lat >= s && c.lat <= n);
+    const hot = (inside.length ? inside : cells).reduce((a, b) => (b.n_hat > a.n_hat ? b : a));
+    flewHot.current = true;
+    m.flyTo({ center: [hot.lon, hot.lat - 0.25], zoom: 8.2, duration: 2600, essential: true });
+  }, [tour, cells, picked, tourYm, bounds]);
+  const stopTour = () => { setTour(null); setPlaying(false); setMode("month"); setLens("fc"); };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dock) setDock(null); else if (mode === "years") { setMode("month"); setPlaying(false); } else onBack();
+      if (tour !== null) stopTour(); else if (drawing) setDrawing(false); else if (dock) setDock(null); else if (mode === "years") { setMode("month"); setPlaying(false); } else onBack();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dock, mode, onBack]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dock, mode, onBack, tour, drawing]);
 
   // ---------- derived numbers ----------
   const idx = useMemo(() => {
@@ -330,7 +414,21 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
   const yTotals = useMemo(() => yd ? {
     fc: yd.n_hat.map((r) => r.reduce((a, b) => a + b, 0)),
     naive: yd.naive.map((r) => r.reduce((a, b) => a + b, 0)),
+    aqua: yd.aqua.map((r) => r.reduce((a, b) => a + b, 0)),
   } : null, [yd]);
+  // fire season and worst years (2003–2025 full years)
+  const peak = useMemo(() => {
+    if (!series.length) return null;
+    const med = Array.from({ length: 12 }, (_, k) => median(series.filter((r) => r.month === k + 1 && r.year >= 2003 && r.year <= 2025).map((r) => r.n_hat)));
+    const top = med.indexOf(Math.max(...med));
+    let a = top, b = top;
+    while (med[(a + 11) % 12] >= 0.5 * med[top] && (a + 11) % 12 !== top) a = (a + 11) % 12;
+    while (med[(b + 1) % 12] >= 0.5 * med[top] && (b + 1) % 12 !== top) b = (b + 1) % 12;
+    const tot = new Map<number, number>();
+    series.filter((r) => r.year >= 2003 && r.year <= 2025).forEach((r) => tot.set(r.year, (tot.get(r.year) ?? 0) + r.n_hat));
+    const worst = [...tot.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([y]) => y);
+    return { month: top + 1, first: a + 1, last: b + 1, worst };
+  }, [series]);
   const hv = hoverYm ? idx.get(`${hoverYm.y}-${hoverYm.m}`) : undefined;
   const ym = `${picked.y}-${String(picked.m).padStart(2, "0")}`;
   const years = Array.from({ length: 25 }, (_, i) => 2002 + i);
@@ -343,17 +441,39 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
 
       {/* top-left: back + region */}
       <div className="pointer-events-none absolute left-4 top-4">
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-line bg-space/80 py-1.5 pl-1.5 pr-5 backdrop-blur">
-          <button className="btn rounded-full py-1 text-sm" onClick={onBack} title="Back to the globe (Esc)">← Globe</button>
+        <div className="pointer-events-auto flex max-w-[310px] items-center gap-3 rounded-3xl border border-line bg-space/80 py-1.5 pl-1.5 pr-4 backdrop-blur">
+          <button className="btn shrink-0 whitespace-nowrap rounded-full py-1 text-sm" onClick={onBack} title="Back to the globe (Esc)">← Globe</button>
           <div>
-            <div className="text-lg font-semibold leading-tight">{labelForArea(area)}</div>
+            <div className="text-lg font-semibold leading-tight">{custom ? "Your area" : labelForArea(area)}</div>
             <div className="text-[11px] text-slate-400">{mode === "years" ? "Every year, 2002–2026" : `${MONTHS[picked.m - 1]} ${picked.y}`}</div>
+            {peak && (
+              <div className="text-[11px] text-slate-300">
+                Fire season <b className="text-fire">{MONTHS[peak.first - 1]}–{MONTHS[peak.last - 1]}</b> · peak {MONTHS[peak.month - 1]} · worst years <b className="text-white">{peak.worst.join(", ")}</b>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* top-right: draw your own area */}
+      {tour === null && (
+        <div className="absolute right-4 top-4 flex flex-col items-end gap-1.5">
+          <button className={`btn bg-space/85 backdrop-blur ${drawing ? "btn-on" : ""}`} onClick={() => setDrawing((d) => !d)}>
+            {drawing ? "Drag a box on the map…" : "✎ Draw area"}
+          </button>
+          {custom && <button className="btn bg-space/85 py-1 text-xs backdrop-blur" onClick={() => setCustom(null)}>↺ Back to {labelForArea(area)}</button>}
+        </div>
+      )}
+
+      {/* story tour */}
+      {tour !== null && (
+        <TourPanel step={tour} setStep={setTour} onClose={stopTour} region={custom ? "your area" : labelForArea(area)} ym={tourYm}
+          row={idx.get(`${tourYm.y}-${tourYm.m}`)} cap={cap} curves={curves} yd={yd} yTotals={yTotals} yi={yi} setYi={setYi}
+          playing={playing} setPlaying={setPlaying} worst={peak?.worst ?? []} />
+      )}
+
       {/* ① top-centre: satellite lens */}
-      {mode === "month" && (
+      {mode === "month" && tour === null && (
         <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-[290px]">
           <div className="card pointer-events-auto bg-space/85 px-4 py-3 text-center">
             <div className="label mb-2 text-sat">Whose eyes? Pick a satellite</div>
@@ -388,7 +508,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
       )}
 
       {/* ③ top-centre: timelapse */}
-      {mode === "years" && (
+      {mode === "years" && tour === null && (
         <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-[260px]">
           <div className="card pointer-events-auto w-[min(760px,100%)] bg-space/90 px-5 py-4">
             {!yd || !yTotals ? <div className="py-6 text-center text-slate-400">Loading 25 years of fires…</div> : (
@@ -427,7 +547,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
 
       {/* hover readouts */}
       {hoverFire && mode === "month" && (
-        <div className="card pointer-events-none absolute right-16 top-4 w-72 p-3 text-sm">
+        <div className="card pointer-events-none absolute right-4 top-[120px] w-72 p-3 text-sm">
           <div className="mb-1 font-semibold">
             {fireStats.key && !(hoverFire as any)[fireStats.key] ? <span className="text-slate-400">Missed by {lensLabel} · </span> : fireStats.key ? <span className="text-sat">Seen by {lensLabel} · </span> : null}
             One detected fire · {hoverFire.frp} MW
@@ -445,7 +565,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
         </div>
       )}
       {hoverGhost && !hoverFire && mode === "month" && (
-        <div className="card pointer-events-none absolute right-16 top-4 w-72 p-3 text-sm">
+        <div className="card pointer-events-none absolute right-4 top-[120px] w-72 p-3 text-sm">
           <div className="mb-1 font-semibold text-[#A78BFA]">○ A fire no satellite saw (estimated)</div>
           <p className="text-[13px] leading-snug text-slate-300">
             {picked.y < 2012
@@ -456,7 +576,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
         </div>
       )}
       {hoverCell && !hoverFire && !hoverGhost && (
-        <div className="card pointer-events-none absolute right-16 top-4 p-3 text-sm">
+        <div className="card pointer-events-none absolute right-4 top-[120px] p-3 text-sm">
           <div className="num text-lg font-semibold">{fmt(hoverCell.v)} {mode === "month" && lens !== "fc" ? "detections" : "fires"}</div>
           <div className="text-xs text-slate-400">
             in this {mode === "years" ? yd?.res : res}° cell{(mode === "years" ? ylens !== "n_hat" : lens !== "fc") ? <> · FireCensus: {fmt(hoverCell.fc)}</> : null}
@@ -473,7 +593,7 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
           ) : (
             <><span className="text-[#FFE3C2]">●</span> {fmt(fireStats.seen)} fires seen by at least one satellite · switch to FireCensus to add the unseen ones</>
           )}
-          <span className="ml-2 text-slate-500">· cells {res}°</span>
+          <span className="ml-2 text-slate-500">· cells {res}°{cellNote ? " · before 2012: back-cast from Aqua, cells are noisy" : ""}</span>
         </div>
       )}
 
@@ -505,9 +625,9 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
         </div>
       )}
 
-      {/* bottom control bar */}
+      {/* bottom control bar: one row, legend on the right */}
       <div className="absolute inset-x-4 bottom-9">
-        <div className="card mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-4 gap-y-2 bg-space/85 px-4 py-3 backdrop-blur">
+        <div className="card relative flex items-center gap-x-2.5 whitespace-nowrap bg-space/85 px-4 py-2.5 backdrop-blur">
           {mode === "month" ? (
             <>
               <div className="flex items-center gap-1">
@@ -526,30 +646,44 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
                 </div>
               ) : <span className="text-sm text-slate-500">Counting…</span>}
             </>
-          ) : <span className="text-sm text-slate-300">Timelapse · one map per year · same colour scale for both counts</span>}
+          ) : <span className="text-sm text-slate-300">One map per year · same colour scale for every count</span>}
 
           <div className="flex gap-1 rounded-xl border border-line p-1">
-            <button className={`rounded-lg px-3 py-1.5 text-sm ${display === "flat" ? "bg-fire text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDisplay("flat")}>Map</button>
-            <button className={`rounded-lg px-3 py-1.5 text-sm ${display === "towers" ? "bg-fire text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDisplay("towers")}>3D towers</button>
-            {mode === "month" && <button className={`rounded-lg px-3 py-1.5 text-sm ${dock ? "bg-sat text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDock(dock ? null : "calendar")}>Calendar & skyline</button>}
+            <button className={`rounded-lg px-3 py-1 text-sm ${display === "flat" ? "bg-fire text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDisplay("flat")}>Map</button>
+            <button className={`rounded-lg px-3 py-1 text-sm ${display === "towers" ? "bg-fire text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDisplay("towers")}>3D towers</button>
+            {mode === "month" && <button className={`rounded-lg px-3 py-1 text-sm ${dock ? "bg-sat text-black" : "text-slate-300 hover:bg-white/5"}`} onClick={() => setDock(dock ? null : "calendar")}>Calendar & skyline</button>}
           </div>
-          <button className={`btn ${mode === "years" ? "btn-on" : "border-fire/60 text-white"}`} onClick={() => {
-            if (mode === "years") { setMode("month"); setPlaying(false); } else { setMode("years"); setDock(null); setYi(0); setPlaying(true); }
-          }}>
-            {mode === "years" ? "Back to one month" : "▶ Play 2002–2026"}
+          <button className={`btn ${tour !== null ? "btn-on" : "border-fire/60 text-white"}`} onClick={() => (tour !== null ? stopTour() : setTour(0))}>
+            {tour !== null ? "✕ End story" : "▶ Play the story"}
           </button>
+          <button className={`btn ${dataOpen ? "btn-on" : ""}`} onClick={() => setDataOpen((o) => !o)}>⬇ Data</button>
           {mode === "month" && (
             <label className="flex items-center gap-1.5 text-xs text-slate-300">
-              <input type="checkbox" checked={anomaly} onChange={(e) => setAnomaly(e.target.checked)} /> Compare with a normal year
+              <input type="checkbox" checked={anomaly} onChange={(e) => setAnomaly(e.target.checked)} /> vs a normal year
             </label>
           )}
-          <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400">
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-[11px] text-slate-400">
             <span>{anomaly && mode === "month" ? "¼× normal" : "few"}</span>
-            <span className="h-2.5 w-24 rounded" style={{ background: `linear-gradient(90deg, ${(anomaly && mode === "month" ? RDBU_STOPS : VIRIDIS_STOPS).join(",")})` }} />
+            <span className="h-2.5 w-20 rounded" style={{ background: `linear-gradient(90deg, ${(anomaly && mode === "month" ? RDBU_STOPS : VIRIDIS_STOPS).join(",")})` }} />
             <span>{anomaly && mode === "month" ? "4× normal" : "many fires"}</span>
-            {mode === "month" && <a className="ml-2 text-sat underline" href={api.csvCells(region.country ? { country: region.country } : region, ym, ym)}>⬇ CSV</a>}
           </div>
-          {mode === "month" && cellNote && <p className="w-full text-[11px] text-slate-500">{cellNote}</p>}
+
+          {dataOpen && (
+            <div className="card absolute bottom-full left-1/2 mb-2 w-[420px] -translate-x-1/2 whitespace-normal bg-space/95 p-4">
+              <div className="label mb-2">Download · {custom ? "your area" : labelForArea(area)}</div>
+              <div className="grid grid-cols-[48px_1fr] items-center gap-2 text-sm">
+                <span className="text-slate-400">From</span>
+                <input type="month" min="2002-07" max="2026-11" value={from} onChange={(e) => setFrom(e.target.value)} className="num" />
+                <span className="text-slate-400">To</span>
+                <input type="month" min="2002-07" max="2026-11" value={to} onChange={(e) => setTo(e.target.value)} className="num" />
+              </div>
+              <div className="mt-3 flex flex-col gap-1.5 text-sm">
+                <a className="btn" href={api.csvTimeseries(region, from, to)}>⬇ Monthly fire counts (CSV): FireCensus + each satellite</a>
+                <a className="btn" href={api.csvCells(region.country ? { country: region.country } : region, from, to)}>⬇ Map cells, 0.1° × month (CSV)</a>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">Data: NASA FIRMS (MODIS C6.1, VIIRS 375 m). We acknowledge LANCE FIRMS, operated by NASA ESDIS.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -567,12 +701,12 @@ function Counter({ label, sub, value, color, active, onClick }: { label: string;
 }
 
 /** Two yearly lines on one axis (raw newest satellite vs FireCensus), current year marked; click to jump. */
-function Spark({ years, a, b, i, onPick }: { years: number[]; a: number[]; b: number[]; i: number; onPick: (k: number) => void }) {
-  // each line relative to its own 2012–2025 average, so both sit on one scale and a fake step stands out
+function Spark({ years, a, b, i, onPick, abs }: { years: number[]; a: number[]; b: number[]; i: number; onPick: (k: number) => void; abs?: boolean }) {
+  // default: each line relative to its own 2012–2025 average, so both sit on one scale and a fake step stands out
   const k12 = years.indexOf(2012), k25 = years.indexOf(2025);
   const norm = (v: number[]) => { const ref = v.slice(k12, k25 + 1).reduce((s, d) => s + d, 0) / (k25 - k12 + 1) || 1; return v.map((d) => d / ref); };
-  a = norm(a); b = norm(b);
-  const W = 700, H = 70, max = Math.max(...a, ...b, 1);
+  if (!abs) { a = norm(a); b = norm(b); }
+  const W = 520, H = 80, max = Math.max(...a, ...b, 1);
   const x = (k: number) => 16 + (k * (W - 32)) / (years.length - 1);
   const y = (v: number) => H - 6 - (v / max) * (H - 14);
   const path = (v: number[]) => v.map((d, k) => `${k ? "L" : "M"}${x(k)},${y(d)}`).join("");
@@ -583,7 +717,7 @@ function Spark({ years, a, b, i, onPick }: { years: number[]; a: number[]; b: nu
     }}>
       <line x1={x(k12)} x2={x(k12)} y1={2} y2={H} stroke="#64748b" strokeDasharray="3 3" />
       <text x={x(k12) + 4} y={10} fontSize={9} fill="#94a3b8">VIIRS joins</text>
-      <text x={W - 16} y={10} fontSize={9} fill="#64748b" textAnchor="end">each line vs its own 2012–2025 average</text>
+      <text x={W - 16} y={10} fontSize={9} fill="#64748b" textAnchor="end">{abs ? "fires per year" : "each line vs its own 2012–2025 average"}</text>
       <path d={path(a)} fill="none" stroke="#4FC3F7" strokeWidth={2} />
       <path d={path(b)} fill="none" stroke="#FF6B35" strokeWidth={2.2} />
       <line x1={x(i)} x2={x(i)} y1={2} y2={H} stroke="#fff" strokeOpacity={0.5} />
@@ -592,6 +726,167 @@ function Spark({ years, a, b, i, onPick }: { years: number[]; a: number[]; b: nu
       {[2002, 2006, 2010, 2014, 2018, 2022, 2026].map((yy) => (
         <text key={yy} x={x(years.indexOf(yy))} y={H + 10} fontSize={9} fill="#64748b" textAnchor="middle">{yy}</text>
       ))}
+    </svg>
+  );
+}
+
+// ---------------- story tour ----------------
+const STEPS = [
+  "Every satellite sees a different slice",
+  "Borrowed from ecology: mark & recapture",
+  "Small fires hide",
+  "Adding back the fires nobody saw",
+  "Before 2012: rebuilding the past",
+  "The test: 2012",
+  "What's left is real",
+];
+
+function TourPanel({ step, setStep, onClose, region, ym, row, cap, curves, yd, yTotals, yi, setYi, playing, setPlaying, worst }: {
+  step: number; setStep: (n: number) => void; onClose: () => void; region: string; ym: { y: number; m: number };
+  row?: SeriesRow; cap: any; curves: any; yd: YearsData | null; yTotals: { fc: number[]; naive: number[]; aqua: number[] } | null;
+  yi: number; setYi: (n: number) => void; playing: boolean; setPlaying: (b: boolean | ((p: boolean) => boolean)) => void; worst: number[];
+}) {
+  const when = `${MONTHS[ym.m - 1]} ${ym.y}`;
+  const lp = cap?.lincoln_petersen;
+  const patterns = useMemo(() => {
+    if (!cap) return [];
+    const g = new Map<string, number>();
+    for (const r of cap.patterns as any[]) {
+      const k = [r.a === 1 && "Aqua", r.s === 1 && "S-NPP", r.n === 1 && "NOAA-20"].filter(Boolean).join(" + ");
+      if (k) g.set(k, (g.get(k) ?? 0) + r.fires);
+    }
+    return [...g.entries()].sort((a, b) => b[1] - a[1]);
+  }, [cap]);
+  const allThree = patterns.find(([k]) => k === "Aqua + S-NPP + NOAA-20")?.[1] ?? 0;
+  const year = yd?.years[yi];
+  const jump = yTotals ? yTotals.naive[10] / Math.max(yTotals.naive[9], 1) : 0;
+  const chg = yTotals ? (yTotals.fc[10] / Math.max(yTotals.fc[9], 1) - 1) * 100 : 0;
+
+  let text: React.ReactNode = null, graph: React.ReactNode = null;
+  if (step === 0) {
+    text = <>In {when}, satellites saw <b className="text-white">{fmt(cap?.n_obs ?? row?.n_obs)}</b> fires over {region}. But each satellite saw a different set: only <b className="text-white">{fmt(allThree)}</b> were caught by all three. What a satellite catches depends on when it passes, the clouds, and above all how big the fire is.</>;
+    graph = patterns.length ? <PatternBars rows={patterns.slice(0, 7)} /> : <Loading />;
+  } else if (step === 1) {
+    text = <>Ecologists count fish by catching some, marking them, then catching again: the share of marked fish in the second catch tells you how big the whole lake is. Here Aqua makes the first catch and S-NPP the second. The map shows Aqua&apos;s catch.</>;
+    graph = lp ? (
+      <div className="space-y-2 text-sm">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Stat k="Aqua caught (n₁)" v={lp.n1_aqua} c="#94a3b8" /><Stat k="S-NPP caught (n₂)" v={lp.n2_snpp} c="#4FC3F7" /><Stat k="caught by both (m)" v={lp.m_both} c="#fff" />
+        </div>
+        <div className="rounded-lg bg-white/5 p-2 text-center"><span className="font-mono">N ≈ n₁ × n₂ ÷ m</span> = <b className="num text-lg text-white">{fmt(lp.n)}</b> fires</div>
+        <p className="text-xs text-slate-400">Both satellites together saw {fmt(lp.seen_by_either)} of these fires; the 1950s formula says about <b className="text-white">{fmt(lp.n)}</b> burned. FireCensus, on the same fires: <b className="text-fire">{fmt(lp.firecensus_same_fires)}</b>. Same ballpark from a completely independent method. But Lincoln–Petersen assumes every fire is equally easy to catch, and fires are not.</p>
+      </div>
+    ) : <Loading />;
+  } else if (step === 2) {
+    text = <>A satellite&apos;s chance of seeing a fire rises with its heat (FRP) and falls with pixel size. We fit this for each satellite with a <b className="text-white">Huggins capture–recapture model</b>: <span className="font-mono text-[12px]">logit p = α + β₁·log FRP + β₂·log area</span>. Aqua&apos;s 1 km pixels need about 25 MW to see a fire half the time. On the map: <span className="text-sat">blue</span> = Aqua saw it, <span className="text-slate-400">grey</span> = Aqua missed it but VIIRS caught it. Most of the grey ones are small.</>;
+    graph = curves ? <CurveChart c={curves} /> : <Loading />;
+  } else if (step === 3) {
+    const seen = row?.n_obs ?? 0, tot = row?.n_hat ?? 0;
+    text = <>Each detected fire counts as <span className="font-mono">1 / p*</span>, where p* is the chance that at least one satellite catches a fire like it (<b className="text-white">Horvitz–Thompson</b>). A fire with a 25% chance counts as 4: itself plus 3 that nobody saw. <span className="text-[#A78BFA]">Violet rings</span> are those unseen fires, drawn around the detection they come from.</>;
+    graph = tot ? (
+      <div className="space-y-2 text-sm">
+        <div className="font-mono text-center text-[13px]">N̂ = Σ 1 / p*ᵢ ,  p*ᵢ = 1 − Π (1 − pᵢₛ)</div>
+        <div className="flex h-8 overflow-hidden rounded-lg">
+          <div className="flex items-center justify-center bg-[#FFE3C2] text-xs font-semibold text-black" style={{ width: `${(100 * seen) / tot}%` }}>seen {fmt(seen)}</div>
+          <div className="flex items-center justify-center bg-[#A78BFA]/70 text-xs font-semibold text-black" style={{ width: `${100 - (100 * seen) / tot}%` }}>unseen {fmt(tot - seen)}</div>
+        </div>
+        <p className="text-xs text-slate-400">{when}, {region}: <b className="text-fire">{fmt(tot)}</b> fires in total, {Math.round((100 * (tot - seen)) / tot)}% of them invisible to every satellite.</p>
+      </div>
+    ) : <Loading />;
+  } else if (step === 4) {
+    text = <>From 2002 to 2011 only MODIS (Aqua) flew. In the overlap years we learned how many VIIRS-equivalent fires each Aqua fire stands for, by season and region, and used it to rebuild the earlier years on the same scale. The map shows what Aqua alone saw{year ? ` in ${year}` : ""}; the orange line is the rebuilt record.</>;
+    graph = yd && yTotals ? (
+      <div>
+        <div className="flex gap-4 text-xs"><span><span className="text-[#4FC3F7]">━</span> Aqua alone (raw)</span><span><span className="text-fire">━</span> FireCensus (rebuilt)</span></div>
+        <Spark abs years={yd.years} a={yTotals.aqua} b={yTotals.fc} i={yi} onPick={(k) => { setPlaying(false); setYi(k); }} />
+      </div>
+    ) : <Loading />;
+  } else if (step === 5) {
+    text = <>2012: VIIRS joins. If you always use the newest satellite, the fire count jumps <b className="text-sat">×{jump.toFixed(1)}</b> overnight. The fires did not change, the eyes did. FireCensus moves <b className="text-fire">{chg > 0 ? "+" : ""}{chg.toFixed(0)}%</b>. Watch the map switch from 2011 to 2012.</>;
+    graph = yd && yTotals ? (
+      <div>
+        <div className="flex gap-4 text-xs"><span><span className="text-[#4FC3F7]">━</span> Newest satellite (raw)</span><span><span className="text-fire">━</span> FireCensus</span></div>
+        <Spark years={yd.years} a={yTotals.naive} b={yTotals.fc} i={yi} onPick={(k) => { setPlaying(false); setYi(k); }} />
+      </div>
+    ) : <Loading />;
+  } else {
+    text = <>With the satellite effect removed, what is left is real. The worst years here are <b className="text-white">{worst.join(", ")}</b>; across Southeast Asia the big fire years follow El Niño droughts (2006, 2015, 2019, 2023). This is 25 years of fires on one scale, whichever satellites were flying. Press ▶ to watch them all.</>;
+    graph = yd && yTotals ? (
+      <div>
+        <div className="flex items-center gap-3">
+          <button className="btn h-9 w-9 rounded-full p-0" onClick={() => { if (yi >= yd.years.length - 1) setYi(0); setPlaying((p) => !p); }}>{playing ? "❚❚" : "▶"}</button>
+          <span className="num text-3xl font-semibold">{year}</span>
+          <span className="num text-xl font-semibold text-fire">{fmt(yTotals.fc[yi])}</span><span className="text-xs text-slate-400">fires (FireCensus)</span>
+        </div>
+        <Spark years={yd.years} a={yTotals.naive} b={yTotals.fc} i={yi} onPick={(k) => { setPlaying(false); setYi(k); }} />
+      </div>
+    ) : <Loading />;
+  }
+
+  return (
+    <div className="pointer-events-none absolute left-[340px] right-4 top-4 flex justify-center">
+      <div className="card pointer-events-auto w-full max-w-[1000px] bg-space/92 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="label text-fire">The story · {step + 1}/{STEPS.length}</span>
+          <div className="flex gap-1">{STEPS.map((_, k) => <button key={k} onClick={() => setStep(k)} className={`h-1.5 w-6 rounded-full ${k === step ? "bg-fire" : k < step ? "bg-fire/40" : "bg-white/15"}`} aria-label={`Step ${k + 1}`} />)}</div>
+          <button className="btn ml-auto px-2 py-0.5 text-xs" onClick={onClose} title="End the story (Esc)">✕</button>
+        </div>
+        <div className="grid grid-cols-[1fr_1fr] gap-5">
+          <div>
+            <h3 className="text-xl font-semibold leading-snug">{STEPS[step]}</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-300">{text}</p>
+          </div>
+          <div className="self-center">{graph}</div>
+        </div>
+        <div className="mt-3 flex justify-between">
+          <button className="btn py-1 text-sm" disabled={step === 0} onClick={() => setStep(step - 1)}>← Back</button>
+          {step < STEPS.length - 1
+            ? <button className="btn btn-on py-1 text-sm" onClick={() => setStep(step + 1)}>Next →</button>
+            : <button className="btn btn-on py-1 text-sm" onClick={onClose}>Explore on your own →</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Loading = () => <div className="py-6 text-center text-sm text-slate-500">Loading…</div>;
+const Stat = ({ k, v, c }: { k: string; v: number; c: string }) => (
+  <div className="rounded-lg bg-white/5 p-2"><div className="num text-lg font-semibold" style={{ color: c }}>{fmt(v)}</div><div className="text-[10px] text-slate-400">{k}</div></div>
+);
+
+/** Fires by capture history: which combination of satellites saw them. */
+function PatternBars({ rows }: { rows: [string, number][] }) {
+  const max = Math.max(...rows.map((r) => r[1]), 1);
+  return (
+    <div className="space-y-1">
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex items-center gap-2 text-xs">
+          <span className="w-[150px] shrink-0 text-right text-slate-300">{k}</span>
+          <div className="h-4 flex-1 rounded bg-white/5"><div className="h-4 rounded" style={{ width: `${(100 * v) / max}%`, background: k.includes("+") ? "#FF6B35" : "#4FC3F7", opacity: k.split("+").length === 3 ? 1 : 0.75 }} /></div>
+          <span className="num w-14 text-slate-400">{fmt(v)}</span>
+        </div>
+      ))}
+      <p className="pt-1 text-[10px] text-slate-500">Fires seen by each combination of satellites. Blue = only one satellite saw it.</p>
+    </div>
+  );
+}
+
+/** Detection probability vs fire heat for each satellite (fitted Huggins curves, at nadir pixel size). */
+function CurveChart({ c }: { c: any }) {
+  const W = 440, H = 150, L = 34, B = 24;
+  const xs: number[] = c.frp_mw;
+  const lx = (v: number) => L + ((Math.log10(v) - Math.log10(xs[0])) / (Math.log10(xs[xs.length - 1]) - Math.log10(xs[0]))) * (W - L - 8);
+  const ly = (p: number) => H - B - p * (H - B - 8);
+  const line = (ps: number[]) => ps.map((p, i) => `${i ? "L" : "M"}${lx(xs[i])},${ly(p)}`).join("");
+  const series: [string, string, boolean][] = [["Aqua", "#94a3b8", false], ["SNPP", "#4FC3F7", false], ["NOAA20", "#22d3ee", true]];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      {[0, 0.5, 1].map((p) => <g key={p}><line x1={L} x2={W - 8} y1={ly(p)} y2={ly(p)} stroke="#1e293b" strokeDasharray={p === 0.5 ? "3 3" : ""} /><text x={L - 4} y={ly(p) + 3} fontSize={9} fill="#64748b" textAnchor="end">{p * 100}%</text></g>)}
+      {[1, 10, 100].map((v) => <text key={v} x={lx(v)} y={H - 8} fontSize={9} fill="#64748b" textAnchor="middle">{v} MW</text>)}
+      {series.map(([k, col, dash]) => c.p_detect[k] && <path key={k} d={line(c.p_detect[k])} fill="none" stroke={col} strokeWidth={2.2} strokeDasharray={dash ? "4 3" : ""} />)}
+      <text x={lx(0.55)} y={ly(0.62)} fontSize={10} fill="#4FC3F7">VIIRS (S-NPP, NOAA-20) · 375 m</text>
+      <text x={W - 10} y={ly(0.22)} fontSize={10} fill="#94a3b8" textAnchor="end">MODIS (Aqua) · 1 km</text>
+      <text x={L} y={10} fontSize={9} fill="#64748b">chance of being detected</text>
     </svg>
   );
 }

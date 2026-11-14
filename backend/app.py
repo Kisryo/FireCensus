@@ -230,6 +230,41 @@ def fires(year: int, month: int, bbox: str, limit: int = Query(6000, le=20000)):
                       "w = fires this detection stands for; wf = 1 / chance that at least one satellite sees a fire like it"}
 
 
+@app.get("/capture")
+def capture(year: int, month: int, country: Optional[str] = None, bbox: Optional[str] = None):
+    """Capture histories for one region-month: how many fires each combination of satellites saw,
+    the classic Lincoln-Petersen estimate (Aqua x S-NPP, equal catchability) and the FireCensus estimate."""
+    if not FIRE_FILES:
+        raise HTTPException(503, "per-fire file not found on this server")
+    if country and bbox:
+        raise HTTPException(400, "give country or bbox, not both")
+    where, params = "TRUE", []
+    if country:
+        where, params = "country = ?", [country]
+    elif bbox:
+        x0, y0, x1, y1 = [float(v) for v in bbox.split(",")]
+        where, params = "lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?", [x0, x1, y0, y1]
+    files = "', '".join(FIRE_FILES)
+    df = q(f"""
+      SELECT coalesce(cap_Aqua, -1) a, coalesce(cap_SNPP, -1) s, coalesce(cap_NOAA20, -1) n,
+             count(*) fires, sum(w_final) n_hat
+      FROM read_parquet(['{files}'], union_by_name=true)
+      WHERE year=? AND month=? AND {where} AND w_final > 0
+      GROUP BY 1, 2, 3 ORDER BY fires DESC""", [year, month] + params)
+    n_obs = int(df.fires.sum())
+    both = df[(df.a >= 0) & (df.s >= 0)]          # fires both satellites had a chance to see (overpass + data)
+    n1 = int(both[both.a == 1].fires.sum())       # "marked" by Aqua
+    n2 = int(both[both.s == 1].fires.sum())       # "caught" by S-NPP
+    m = int(both[(both.a == 1) & (both.s == 1)].fires.sum())  # recaptured: seen by both
+    lp = round(n1 * n2 / m) if m else None
+    seen_ab = int(both[(both.a == 1) | (both.s == 1)].fires.sum())
+    fc_ab = round(float(both[(both.a == 1) | (both.s == 1)].n_hat.sum()))
+    return {"year": year, "month": month, "n_obs": n_obs, "n_hat": round(float(df.n_hat.sum())),
+            "lincoln_petersen": {"n1_aqua": n1, "n2_snpp": n2, "m_both": m, "n": lp,
+                                 "seen_by_either": seen_ab, "firecensus_same_fires": fc_ab},
+            "patterns": records(df.round(1))}
+
+
 @app.get("/timeseries")
 def timeseries(country: Optional[str] = None, bbox: Optional[str] = None,
                start: Optional[str] = None, end: Optional[str] = None):
