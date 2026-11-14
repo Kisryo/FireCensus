@@ -14,3 +14,5 @@ html, body { background: #0B0F1A; color: #E6EDF3; }
 input, select { @apply rounded-md border border-line bg-space px-2 py-1 text-sm text-slate-100 focus:border-sat focus:outline-none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .maplibregl-ctrl-attrib { font-size: 10px; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

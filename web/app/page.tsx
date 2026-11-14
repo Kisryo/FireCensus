@@ -2,16 +2,16 @@
 // One continuous story on one globe (page-flow.md section 2, extended):
 //   chapters 1-5 explain the problem and the method (Spline Welcome / Story_* states),
 //   chapters 6-8 walk through a real example with live data (Story_Example_* states, Spline v5),
-//   chapter 9 hands the globe to the visitor: click a pin, the globe zooms in, then open a
-//   3D skyline, map or calendar as a large overlay over the globe (components/RegionViews.tsx).
+//   chapter 9 hands the globe to the visitor: click a pin, the Spline globe zooms to the region,
+//   then a real map of that region fades in and flies down onto it (components/RegionExplorer.tsx).
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, type CalendarMonth, type Compare, type SeriesRow } from "@/lib/api";
-import { CASES, REGIONS, pinForArea } from "@/lib/regions";
+import { CASES, REGIONS, labelForArea, pinForArea } from "@/lib/regions";
 import { MONTHS, fmt } from "@/lib/colors";
 import { HistoryBars, SeasonChart, TrendChart } from "@/components/Charts";
-import RegionViews, { RegionOptions, type View } from "@/components/RegionViews";
+const RegionExplorer = dynamic(() => import("@/components/RegionExplorer"), { ssr: false });
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const SplineScene = dynamic(() => import("@/components/SplineScene"), { ssr: false });
@@ -143,7 +143,14 @@ function StoryInner() {
   const initCountry = params.get("country");
   const [area, setArea] = useState<string | null>(initCase ? `case:${initCase.id}` : initCountry ? `country:${initCountry}` : null);
   const [ym, setYm] = useState(initCase ? { y: initCase.year, m: initCase.month } : LATEST);
-  const [openView, setOpenView] = useState<View | null>(null);
+  const [mapOn, setMapOn] = useState(false);
+  // after a region is picked, let the Spline camera fly there (~1.4 s), then hand over to the real map
+  useEffect(() => {
+    setMapOn(false);
+    if (!area || step !== EXPLORE) return;
+    const t = setTimeout(() => setMapOn(true), flat ? 0 : 1500);
+    return () => clearTimeout(t);
+  }, [area, step, flat]);
 
   useEffect(() => {
     api.health().catch(() => {}); // wake the backend early
@@ -168,11 +175,11 @@ function StoryInner() {
 
   const pick = useCallback((id: string) => {
     const r = REGIONS.find((x) => x.id === id);
-    if (r) { setArea(r.areaKey); setYm(LATEST); setOpenView(null); }
+    if (r) { setArea(r.areaKey); setYm(LATEST); }
   }, []);
   const pickCase = (id: string) => {
     const c = CASES.find((x) => x.id === id)!;
-    setArea(`case:${c.id}`); setYm({ y: c.year, m: c.month }); setOpenView(null);
+    setArea(`case:${c.id}`); setYm({ y: c.year, m: c.month });
   };
   const onStateChange = useCallback((v: string) => {
     if (!v?.startsWith("Explore_") || v === "Explore_Overview") return;
@@ -206,7 +213,7 @@ function StoryInner() {
       )}
 
       {/* chapter dots */}
-      <nav className="fixed left-4 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2 md:flex" aria-label="Chapters">
+      <nav className={`fixed left-4 top-1/2 z-30 ${mapOn ? "!hidden" : ""} hidden -translate-y-1/2 flex-col gap-2 md:flex`} aria-label="Chapters">
         {CHAPTERS.map((c, i) => (
           <button key={i} title={c.kicker} onClick={() => refs.current[i]?.scrollIntoView({ behavior: "smooth", block: "center" })}
             className={`h-2.5 w-2.5 rounded-full ${i === step ? "bg-fire" : i >= 5 ? "bg-sat/40" : "bg-white/25"}`} />
@@ -237,13 +244,13 @@ function StoryInner() {
         <div className="h-[20vh]" />
       </div>
 
-      {/* chapter 9, region picked: three view options float over the zoomed-in globe */}
-      {step === EXPLORE && area && !openView && (
-        <RegionOptions area={area} onOpen={setOpenView} onBack={() => setArea(null)} />
+      {/* chapter 9, region picked: the real map of the region takes over from the globe */}
+      {step === EXPLORE && area && !mapOn && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-10 z-30 text-center text-sm text-slate-300 [text-shadow:0_1px_6px_#000]">
+          Flying to {labelForArea(area)}…
+        </div>
       )}
-      {area && openView && (
-        <RegionViews area={area} view={openView} onView={setOpenView} onClose={() => setOpenView(null)} initYm={ym} />
-      )}
+      {area && mapOn && <RegionExplorer key={area} area={area} initYm={ym} onBack={() => setArea(null)} />}
     </main>
   );
 }
