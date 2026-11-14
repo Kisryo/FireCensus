@@ -2,16 +2,16 @@
 // One continuous story on one globe (page-flow.md section 2, extended):
 //   chapters 1-5 explain the problem and the method (Spline Welcome / Story_* states),
 //   chapters 6-8 walk through a real example with live data (Story_Example_* states, Spline v5),
-//   chapter 9 hands the globe to the visitor: click a pin, read the three answers.
+//   chapter 9 hands the globe to the visitor: click a pin, the Spline globe zooms to the region,
+//   then a real map of that region fades in and flies down onto it (components/RegionExplorer.tsx).
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, type CalendarMonth, type Compare, type SeriesRow } from "@/lib/api";
-import { CASES, REGIONS, pinForArea } from "@/lib/regions";
+import { CASES, REGIONS, labelForArea, pinForArea } from "@/lib/regions";
 import { MONTHS, fmt } from "@/lib/colors";
 import { HistoryBars, SeasonChart, TrendChart } from "@/components/Charts";
-import GuidedExplore from "@/components/GuidedExplore";
+const RegionExplorer = dynamic(() => import("@/components/RegionExplorer"), { ssr: false });
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const SplineScene = dynamic(() => import("@/components/SplineScene"), { ssr: false });
@@ -109,7 +109,7 @@ function RegionPicker({ pick, pickCase }: { pick: (id: string) => void; pickCase
   return (
     <>
       <h2 className="mt-2 text-2xl font-semibold leading-snug">Now pick any region.</h2>
-      <p className="mt-2 text-[15px] text-slate-300"><b>Click a glowing pin on the globe</b>, or choose below. You&apos;ll get the same three answers for any area and any month since 2002.</p>
+      <p className="mt-2 text-[15px] text-slate-300"><b>Click a glowing pin on the globe</b>, or choose below. The globe flies there, then you choose how to look at its fires: a 3D skyline, a map or a calendar, for every month since 2002.</p>
       <div className="mt-4 grid grid-cols-2 gap-1.5">
         {REGIONS.map((r) => (
           <button key={r.id} className="btn text-left" onClick={() => pick(r.id)}>
@@ -126,9 +126,6 @@ function RegionPicker({ pick, pickCase }: { pick: (id: string) => void; pickCase
           </button>
         ))}
       </div>
-      <p className="mt-4 text-xs text-slate-500">
-        Want the full toolkit? <Link href="/explore/advanced" className="text-sat underline">3D skyline, map & CSV</Link> · <Link href="/explore?flat=1" className="text-sat underline">2D version</Link>
-      </p>
     </>
   );
 }
@@ -146,6 +143,14 @@ function StoryInner() {
   const initCountry = params.get("country");
   const [area, setArea] = useState<string | null>(initCase ? `case:${initCase.id}` : initCountry ? `country:${initCountry}` : null);
   const [ym, setYm] = useState(initCase ? { y: initCase.year, m: initCase.month } : LATEST);
+  const [mapOn, setMapOn] = useState(false);
+  // after a region is picked, let the Spline camera fly there (~1.4 s), then hand over to the real map
+  useEffect(() => {
+    setMapOn(false);
+    if (!area || step !== EXPLORE) return;
+    const t = setTimeout(() => setMapOn(true), flat ? 0 : 1500);
+    return () => clearTimeout(t);
+  }, [area, step, flat]);
 
   useEffect(() => {
     api.health().catch(() => {}); // wake the backend early
@@ -208,7 +213,7 @@ function StoryInner() {
       )}
 
       {/* chapter dots */}
-      <nav className="fixed left-4 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2 md:flex" aria-label="Chapters">
+      <nav className={`fixed left-4 top-1/2 z-30 ${mapOn ? "!hidden" : ""} hidden -translate-y-1/2 flex-col gap-2 md:flex`} aria-label="Chapters">
         {CHAPTERS.map((c, i) => (
           <button key={i} title={c.kicker} onClick={() => refs.current[i]?.scrollIntoView({ behavior: "smooth", block: "center" })}
             className={`h-2.5 w-2.5 rounded-full ${i === step ? "bg-fire" : i >= 5 ? "bg-sat/40" : "bg-white/25"}`} />
@@ -225,25 +230,27 @@ function StoryInner() {
         {CHAPTERS.map((c, i) => (
           <section key={i} id={i === EXPLORE ? "explore" : undefined} ref={(el) => { refs.current[i] = el; }} data-i={i}
             className={`flex ${c.explore ? "min-h-screen items-start pt-16" : "min-h-screen items-center"} px-6 md:pl-14`}>
-            <div className={`pointer-events-auto w-full ${c.chart || c.explore ? "max-w-[560px]" : "max-w-md"} transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-35"}`}>
+            {!(c.explore && area) && <div className={`pointer-events-auto w-full ${c.chart || c.explore ? "max-w-[560px]" : "max-w-md"} transition-opacity duration-500 ${i === step ? "opacity-100" : "opacity-35"}`}>
               <div className="card p-6">
                 <div className={`label ${i >= 5 ? "text-sat" : "text-fire"}`}>{c.kicker}</div>
                 {c.title && <h2 className="mt-2 text-2xl font-semibold leading-snug">{c.title}</h2>}
                 {c.body && <p className="mt-3 text-[15px] leading-relaxed text-slate-300">{c.body}</p>}
                 {c.chart && <ExampleCard chart={c.chart} d={d} />}
-                {c.explore && !area && <RegionPicker pick={pick} pickCase={pickCase} />}
-                {c.explore && area && (
-                  <div className="-mx-5 -mb-6">
-                    <div className="px-5"><button className="btn mt-3 text-sm" onClick={() => setArea(null)}>← All regions</button></div>
-                    <GuidedExplore compact area={area} onArea={setArea} initYear={ym.y} initMonth={ym.m} onAreaPicked={(_, y, m) => setYm({ y, m })} />
-                  </div>
-                )}
+                {c.explore && <RegionPicker pick={pick} pickCase={pickCase} />}
               </div>
-            </div>
+            </div>}
           </section>
         ))}
         <div className="h-[20vh]" />
       </div>
+
+      {/* chapter 9, region picked: the real map of the region takes over from the globe */}
+      {step === EXPLORE && area && !mapOn && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-10 z-30 text-center text-sm text-slate-300 [text-shadow:0_1px_6px_#000]">
+          Flying to {labelForArea(area)}…
+        </div>
+      )}
+      {area && mapOn && <RegionExplorer key={area} area={area} initYm={ym} onBack={() => setArea(null)} />}
     </main>
   );
 }

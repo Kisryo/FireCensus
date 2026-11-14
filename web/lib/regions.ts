@@ -119,3 +119,36 @@ export function pinForArea(key: string): string {
   if (c.country) return REGIONS.find((r) => r.region.country === c.country)?.id ?? "indonesia";
   return c.id === "mainland-2020" ? "mainland" : "borneo_sumatra";
 }
+
+/** API region and display name for a panel area key (case:/country:/region:). */
+export function regionForArea(key: string): { country?: string; bbox?: string } {
+  const [kind, id] = key.split(":");
+  if (kind === "country") return { country: id };
+  if (kind === "region") return REGIONS.find((r) => r.id === id)?.region ?? { country: "Indonesia" };
+  const c = CASES.find((x) => x.id === id);
+  return c ? (c.country ? { country: c.country } : { bbox: c.bbox }) : { country: "Indonesia" };
+}
+export function labelForArea(key: string): string {
+  const [kind, id] = key.split(":");
+  if (kind === "country") return REGIONS.find((r) => r.region.country === id)?.name ?? countryName(id);
+  if (kind === "region") return REGIONS.find((r) => r.id === id)?.name ?? id;
+  return CASES.find((x) => x.id === id)?.title ?? id;
+}
+
+/** Map extent [west, south, east, north] for each globe pin (used to fly the map in). */
+export const PIN_BOUNDS: Record<string, [number, number, number, number]> = {
+  indonesia: [95, -11, 141, 6],
+  borneo_sumatra: [95, -6, 120, 6],
+  mainland: [92, 10, 110, 24],
+  malaysia: [99.5, 0.8, 119.5, 7.5],
+  brunei: [114, 4, 115.4, 5.1],
+  thailand: [97.3, 5.6, 105.7, 20.5],
+  myanmar: [92.2, 9.8, 101.2, 28.6],
+  laos: [100, 13.9, 107.7, 22.5],
+  cambodia: [102.3, 10.4, 107.7, 14.7],
+};
+export function boundsForArea(key: string): [number, number, number, number] {
+  const r = regionForArea(key);
+  if (r.bbox) { const v = r.bbox.split(",").map(Number); return [v[0], v[1], v[2], v[3]]; }
+  return PIN_BOUNDS[pinForArea(key)] ?? PIN_BOUNDS.indonesia;
+}

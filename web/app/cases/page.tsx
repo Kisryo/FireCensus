@@ -17,7 +17,7 @@ export default function CasesPage() {
             <ul className="mt-3 flex-1 space-y-2 text-[15px] leading-relaxed text-slate-300">
               {c.story.map((s, i) => <li key={i}>• {s}</li>)}
             </ul>
-            <Link href={`/explore?case=${c.id}`} className="btn btn-on mt-5 self-start">Open in Explore →</Link>
+            <Link href={`/?case=${c.id}#explore`} className="btn btn-on mt-5 self-start">Open on the globe →</Link>
           </article>
         ))}
       </div>
