@@ -1,0 +1,34 @@
+name: FireCensus deployment lint
+
+on:
+  repository_dispatch:
+    types: [vercel.deployment.ready]
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+jobs:
+  lint:
+    if: ${{ github.event.client_payload.project.name == 'firecensus' && github.event.client_payload.environment == 'production' && github.event.client_payload.git.sha != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Notify Vercel
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: 'Vercel - firecensus: lint'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.git.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
