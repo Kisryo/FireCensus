@@ -27,14 +27,16 @@ FireCensus turns 25 years of NASA MODIS and VIIRS fire hotspots into **one consi
 5. [The model](#5-the-model)
 6. [Does it work? Validation](#6-does-it-work-validation)
 7. [How FireCensus compares](#7-how-firecensus-compares)
-8. [The website](#8-the-website)
-9. [How we meet the challenge objectives](#9-how-we-meet-the-challenge-objectives)
-10. [Architecture, pipeline and API](#10-architecture-pipeline-and-api)
-11. [Run it yourself](#11-run-it-yourself)
-12. [Limitations](#12-limitations)
-13. [Use of AI](#13-use-of-ai)
-14. [Data, credits and references](#14-data-credits-and-references)
-15. [Read more](#15-read-more)
+8. [Benefits](#8-benefits)
+9. [The website](#9-the-website)
+10. [How we meet the challenge objectives](#10-how-we-meet-the-challenge-objectives)
+11. [Architecture, pipeline, tools and API](#11-architecture-pipeline-tools-and-api)
+12. [Run it yourself](#12-run-it-yourself)
+13. [Limitations](#13-limitations)
+14. [What we hope to achieve](#14-what-we-hope-to-achieve)
+15. [Use of AI](#15-use-of-ai)
+16. [Data, credits and references](#16-data-credits-and-references)
+17. [Read more](#17-read-more)
 
 ---
 
@@ -177,7 +179,15 @@ Capture–recapture has several classic estimators with different assumptions. I
 | Uncertainty | residuals after the fact | from the capture model; larger where fewer satellites passed |
 | Explainability | one number per region | a detection curve per satellite with physical meaning |
 
-## 8. The website
+## 8. Benefits
+
+- **One record that doesn't jump when satellites change.** Removing a satellite moves FireCensus by 0–6%, against 15–25% for raw counts; the 2012 VIIRS jump falls from ×4.4 to −4%.
+- **It counts the fires every satellite missed**, cell by cell, instead of hiding them inside one conversion ratio. That matters most for the small peat and farm fires of Southeast Asia.
+- **It keeps working after MODIS ends in 2027.** The same model runs on VIIRS alone, and it handled the real S-NPP retirement on 2 November 2026 automatically.
+- **It is explainable.** Each satellite has a detection curve with physical meaning, and every number on the map can be traced back to individual detections and their weights.
+- **Anyone can use it without coding.** Pick or draw an area, see whether this month is normal, find the fire season and the worst years, and download the data as CSV.
+
+## 9. The website
 
 **<https://firecensus-rho.vercel.app>** (desktop, 1024 px or wider for the 3D globe; narrower screens get a 2D version)
 
@@ -215,7 +225,7 @@ Seven steps, each with its own chart and map move: capture histories → mark & 
 - **Cases:** Indonesia 2026 (live, with the S-NPP retirement), Borneo & Sumatra 2019, the 2015 haze, the MODIS-only 2006 season, mainland farm burning in March 2020. Each opens on the globe.
 - **[Method](https://firecensus-rho.vercel.app/method):** the full write-up with formulas, coefficients, live detection curves, validation and references.
 
-## 9. How we meet the challenge objectives
+## 10. How we meet the challenge objectives
 
 | Challenge objective | Where |
 |---|---|
@@ -228,7 +238,7 @@ Seven steps, each with its own chart and map move: capture histories → mark & 
 | Downloadable results | CSV of the monthly series and 0.1° cells for any area and date range |
 | Uses NASA data | NASA FIRMS (MODIS C6.1, VIIRS 375 m), NASA GIBS, Blue Marble, NASA 3D Resources |
 
-## 10. Architecture, pipeline and API
+## 11. Architecture, pipeline, tools and API
 
 ```
 FIRMS CSV (MODIS C6.1, VIIRS 375 m: S-NPP, NOAA-20, NOAA-21; archive + NRT)
@@ -245,6 +255,20 @@ s4_product                    → cells_month, cells_clim, country_month, countr
    ▼  web/      Next.js 15, React 19, Tailwind, MapLibre GL (globe), Spline, react-three-fiber
 ```
 
+### Tools and technologies
+
+| | |
+|---|---|
+| Languages | Python (data pipeline and models), TypeScript (website), SQL (DuckDB queries) |
+| Data and statistics | pandas, NumPy, SciPy, scikit-learn (DBSCAN clustering), statsmodels (log-linear models), DuckDB, Apache Parquet |
+| Backend | FastAPI (Python) |
+| Website | Next.js 15, React 19, Tailwind CSS, MapLibre GL (globe map), Spline (3D globe), react-three-fiber (3D skyline); hosted on Vercel |
+| 3D assets | NASA Blue Marble textures and NASA 3D Resources satellite models, prepared in Blender |
+| Hardware | a standard laptop; no special hardware |
+| AI assistance | Claude (Anthropic) for research, coding, analysis and writing (see [Use of AI](#15-use-of-ai)) |
+
+### API
+
 | Endpoint | What it returns |
 |---|---|
 | `GET /timeseries` | Monthly FireCensus count plus each raw sensor and the naive series, for a country or box |
@@ -259,7 +283,7 @@ s4_product                    → cells_month, cells_clim, country_month, countr
 
 Interactive API docs: `http://127.0.0.1:8000/docs` when running locally.
 
-## 11. Run it yourself
+## 12. Run it yourself
 
 Requirements: Python 3.10+ and Node.js LTS (Windows scripts provided; the commands work on any OS).
 
@@ -274,7 +298,7 @@ docs/       research notes, findings log, credits, Spline build notes, screensho
 assets/     NASA textures and models used in the 3D scene, with processing notes
 ```
 
-## 12. Limitations
+## 13. Limitations
 
 - **Closure.** Capture–recapture assumes the fire population is stable during the 3-hour window. It isn't entirely; we measured how recapture falls with the time gap between passes and define the estimate as *fires burning during the window*.
 - **Hidden differences between fires** (cloud, canopy, peat depth) that the model does not include make $\hat N$ conservative. Models calibrated on different periods differ by about 20% (2023–25 vs 2012–21, partly Aqua's orbit drift); every year uses the same 2012–2021 calibration, so comparisons over time are fair.
@@ -284,11 +308,20 @@ assets/     NASA textures and models used in the 3D scene, with processing notes
 - **Afternoon passes only**; night passes and Terra's morning pass are not yet modelled.
 - **Map position of unseen fires is illustrative** (drawn within ~2 km of the detection they are inferred from); only their number is estimated.
 
-## 13. Use of AI
+## 14. What we hope to achieve
+
+We want the 25-year MODIS fire record to survive the end of MODIS, so that early-warning teams, haze researchers and land managers in Southeast Asia can compare this year's fires with the past fairly. Next steps:
+
+- add night passes and Terra's morning pass to the model;
+- extend the method to other regions (the Australia test already shows it adapts to different fire types);
+- link fire counts to burned area and haze emissions;
+- run it automatically every day on FIRMS near-real-time data.
+
+## 15. Use of AI
 
 We used **Claude (Anthropic)**, an AI assistant, during this project for: ideation and literature research, data-analysis support, writing and debugging code (pipeline, backend and website), building the Spline 3D scene, and writing and editing text (this README, the Method page, the project summary). Commits made with AI assistance carry a `Co-Authored-By: Claude` line. All numbers in this README come from our own pipeline runs and were checked against the data; the AI did not generate any images, video or audio for the project. Fire data, imagery and 3D models are NASA material (see below).
 
-## 14. Data, credits and references
+## 16. Data, credits and references
 
 **Data.** We acknowledge the use of data and imagery from LANCE FIRMS, operated by NASA's Earth Science Data and Information System (ESDIS), with funding provided by NASA Headquarters. <https://www.earthdata.nasa.gov/data/tools/firms>
 
@@ -312,7 +345,7 @@ Full source list and processing notes: [docs/credits.md](docs/credits.md).
 - Fienberg (1972). The multiple recapture census for closed populations and incomplete 2^k contingency tables. *Biometrika* 59, 591–603.
 - Petersen (1896); Lincoln (1930): the two-sample mark–recapture estimator.
 
-## 15. Read more
+## 17. Read more
 
 - **[docs/research.md](docs/research.md)**: the full research behind the project: what the challenge asks, how other teams approached it, NASA and scientific practice (detection limits, observation operators, orbit drift), why Southeast Asia, the alternatives we considered, and the interdisciplinary methods we evaluated before choosing capture–recapture. *(Working notes, written in Chinese.)*
 - **[docs/findings-log.md](docs/findings-log.md)**: every pipeline result, model fit, validation run and decision, in the order they happened. *(Chinese.)*
