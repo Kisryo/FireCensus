@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 // Only the read-only endpoints used by the UI are exposed through this proxy.
 const endpoints = new Set([
   "health", "meta", "timeseries", "calendar", "compare", "cells", "cells/years",
-  "fires", "cases", "method/detection-curves", "export/timeseries.csv", "export/cells.csv",
+  "fires", "capture", "cases", "method/detection-curves", "export/timeseries.csv", "export/cells.csv",
 ]);
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

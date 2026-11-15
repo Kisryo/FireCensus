@@ -355,7 +355,11 @@ export default function RegionExplorer({ area, initYm, onBack }: { area: string;
     if (tour === null) return;
     if (!curves) api.curves().then(setCurves).catch(() => {});
     if (!cap) fetch(`${API}/capture?year=${tourYm.y}&month=${tourYm.m}&${region.country ? `country=${encodeURIComponent(region.country)}` : `bbox=${region.bbox}`}`)
-      .then((r) => r.json()).then(setCap).catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Capture data request failed (${r.status})`);
+        const data = await r.json();
+        if (Array.isArray(data?.patterns)) setCap(data);
+      }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour, cap, region, tourYm]);
   const flewHot = useRef(false);
@@ -749,7 +753,7 @@ function TourPanel({ step, setStep, onClose, region, ym, row, cap, curves, yd, y
   const when = `${MONTHS[ym.m - 1]} ${ym.y}`;
   const lp = cap?.lincoln_petersen;
   const patterns = useMemo(() => {
-    if (!cap) return [];
+    if (!Array.isArray(cap?.patterns)) return [];
     const g = new Map<string, number>();
     for (const r of cap.patterns as any[]) {
       const k = [r.a === 1 && "Aqua", r.s === 1 && "S-NPP", r.n === 1 && "NOAA-20"].filter(Boolean).join(" + ");
